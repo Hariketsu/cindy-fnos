@@ -1,0 +1,15 @@
+appname=cindy
+version=@VERSION@
+display_name=Cindy
+desc=Cindy AI Agent for fnOS: the official Cindy interface and agent runtime, running on your NAS. Unofficial community port.
+platform=@PLATFORM@
+source=thirdparty
+maintainer=cindy-fnos
+maintainer_url=https://github.com/Hariketsu/cindy-fnos
+distributor=cindy-fnos
+distributor_url=https://github.com/Hariketsu/cindy-fnos
+os_min_version=1.2.0401
+desktop_uidir=ui
+desktop_applaunchname=cindy.main
+ctl_stop=true
+checkport=false

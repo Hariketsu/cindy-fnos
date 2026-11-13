@@ -1,0 +1,26 @@
+{
+  ".url": {
+    "cindy.main": {
+      "title": "Cindy",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "protocol": "",
+      "gatewayPrefix": "/app/cindy",
+      "gatewaySocket": "app.sock",
+      "url": "/app/cindy/",
+      "allUsers": false,
+      "control": { "accessPerm": "readonly" }
+    },
+    "cindy.tab": {
+      "title": "Cindy（新标签页）",
+      "icon": "images/icon_{0}.png",
+      "type": "url",
+      "protocol": "",
+      "gatewayPrefix": "/app/cindy",
+      "gatewaySocket": "app.sock",
+      "url": "/app/cindy/",
+      "allUsers": false,
+      "control": { "accessPerm": "readonly" }
+    }
+  }
+}

@@ -1,29 +1,112 @@
 Subject: host build: allow selecting which agent harnesses to bundle
 
 Why: cindy-fnos bundles only Pi (plus ripgrep). Claude Code and Codex add
-~785 MB on linux-arm64 and are not shipped in the fnOS app.
+~785 MB on linux-arm64 and are not shipped in the fnOS app. Same code as the
+upstream PR (--harnesses, with CINDY_HOST_HARNESSES as fallback).
 Upstream: issue https://github.com/makecindy/cindy/issues/10404, PR https://github.com/makecindy/cindy/pull/10418
-Remove when: upstream build.mjs supports choosing harnesses.
+Remove when: the PR is merged and upstream.lock moves past it.
 
 diff --git a/apps/host/scripts/build.mjs b/apps/host/scripts/build.mjs
-index 5507a818..d17dc047 100644
+index 5507a81863..7e69b03773 100644
 --- a/apps/host/scripts/build.mjs
 +++ b/apps/host/scripts/build.mjs
-@@ -184,7 +184,16 @@ try {
+@@ -13,14 +13,18 @@ import { parseArgs } from 'node:util';
+ import { build } from 'esbuild';
+ import { chromium } from 'playwright-core';
+ import { clientMigrationContract } from '../src/client-migration-contract.mjs';
++import { selectReleaseHarnesses } from '../src/release-harnesses.mjs';
+ 
+ const repo = fileURLToPath(new URL('../../..', import.meta.url));
+ const host = path.join(repo, 'apps/host');
+ const desktop = path.join(repo, 'apps/desktop');
+ const { values } = parseArgs({ options: {
+-  output: { type: 'string' }, 'web-dir': { type: 'string' },
++  output: { type: 'string' }, 'web-dir': { type: 'string' }, harnesses: { type: 'string' },
+ } });
+-if (!values.output) throw new Error('Usage: pnpm --filter @cindy/host build --output <new-directory> [--web-dir <renderer-build>]');
++if (!values.output) throw new Error('Usage: pnpm --filter @cindy/host build --output <new-directory> [--web-dir <renderer-build>] [--harnesses <name,...>]');
++// Resolved before any build work so an invalid selection fails immediately.
++const harnessSelection = selectReleaseHarnesses({ option: values.harnesses });
++for (const warning of harnessSelection.warnings) console.warn(`Warning: ${warning}`);
+ const output = path.resolve(values.output);
+ if (syncFs.existsSync(output)) throw new Error(`Output already exists; choose a new directory: ${output}`);
+ await fs.mkdir(path.dirname(output), { recursive: true });
+@@ -184,7 +188,9 @@ try {
  
    // Copy the verified checkout runtimes with their own support files. A missing
    // harness is a build error, never a release claiming an unavailable agent.
 -  for (const name of ['claude-code-bin', 'codex-package-bin', 'pi-bin', 'ripgrep-bin']) {
-+  // CINDY_HOST_HARNESSES (comma-separated) narrows the set for distributions
-+  // that ship fewer agents; unset keeps every harness.
-+  const allHarnesses = ['claude-code-bin', 'codex-package-bin', 'pi-bin', 'ripgrep-bin'];
-+  const selectedHarnesses = process.env.CINDY_HOST_HARNESSES
-+    ? process.env.CINDY_HOST_HARNESSES.split(',').map(name => name.trim()).filter(Boolean)
-+    : allHarnesses;
-+  const unknownHarnesses = selectedHarnesses.filter(name => !allHarnesses.includes(name));
-+  if (unknownHarnesses.length) throw new Error(`Unknown harness in CINDY_HOST_HARNESSES: ${unknownHarnesses.join(', ')}`);
-+  metadata.harnesses = selectedHarnesses;
-+  for (const name of selectedHarnesses) {
++  // The selection is recorded so a release states which agents it can run.
++  metadata.harnesses = harnessSelection.harnesses;
++  for (const name of harnessSelection.harnesses) {
      await fs.cp(path.join(repo, 'apps', name, platformKey), path.join(resources, 'harnesses', name, platformKey), {
        recursive: true, dereference: true,
      });
+diff --git a/apps/host/src/release-harnesses.mjs b/apps/host/src/release-harnesses.mjs
+new file mode 100644
+index 0000000000..6e2719a9fe
+--- /dev/null
++++ b/apps/host/src/release-harnesses.mjs
+@@ -0,0 +1,27 @@
++/** Agent harness runtimes a standalone Host release can bundle (`apps/<name>/<platform>`). */
++export const RELEASE_HARNESSES = Object.freeze(['claude-code-bin', 'codex-package-bin', 'pi-bin', 'ripgrep-bin']);
++
++/**
++ * Choose which harnesses a release bundles. `--harnesses` takes precedence over
++ * `CINDY_HOST_HARNESSES`; with neither, every harness is bundled as before.
++ * Unknown names fail fast so a typo cannot ship a release missing an agent.
++ *
++ * @param {{ option?: string, env?: NodeJS.ProcessEnv }} [input]
++ * @returns {{ harnesses: string[], warnings: string[] }}
++ */
++export function selectReleaseHarnesses({ option, env = process.env } = {}) {
++  const raw = option ?? env.CINDY_HOST_HARNESSES;
++  if (raw === undefined || raw.trim() === '') return { harnesses: [...RELEASE_HARNESSES], warnings: [] };
++  const requested = new Set(raw.split(',').map(name => name.trim()).filter(Boolean));
++  const unknown = [...requested].filter(name => !RELEASE_HARNESSES.includes(name));
++  if (unknown.length) {
++    throw new Error(`Unknown harness: ${unknown.join(', ')}. Choose from: ${RELEASE_HARNESSES.join(', ')}`);
++  }
++  if (!requested.size) throw new Error('No harness selected; omit --harnesses to bundle all of them');
++  const warnings = [];
++  // ripgrep is a tool, not an agent, but Pi's search and file tools depend on it.
++  if (requested.has('pi-bin') && !requested.has('ripgrep-bin')) {
++    warnings.push('pi-bin is selected without ripgrep-bin; Pi search and file tools need ripgrep, so bundle both.');
++  }
++  return { harnesses: RELEASE_HARNESSES.filter(name => requested.has(name)), warnings };
++}
+diff --git a/apps/host/src/release-harnesses.test.mjs b/apps/host/src/release-harnesses.test.mjs
+new file mode 100644
+index 0000000000..6742672f89
+--- /dev/null
++++ b/apps/host/src/release-harnesses.test.mjs
+@@ -0,0 +1,29 @@
++// Protects the release harness selection used by scripts/build.mjs: which agent
++// runtimes a standalone Host bundles, and that a bad selection fails before the
++// build instead of shipping a release without an agent. Unit tier, no I/O.
++import assert from 'node:assert/strict';
++import test from 'node:test';
++
++import { RELEASE_HARNESSES, selectReleaseHarnesses } from './release-harnesses.mjs';
++
++test('bundles every harness when nothing is selected', () => {
++  for (const input of [{ env: {} }, { env: { CINDY_HOST_HARNESSES: '' } }]) {
++    assert.deepEqual(selectReleaseHarnesses(input), { harnesses: [...RELEASE_HARNESSES], warnings: [] });
++  }
++});
++
++test('--harnesses takes precedence over CINDY_HOST_HARNESSES', () => {
++  const env = { CINDY_HOST_HARNESSES: 'claude-code-bin' };
++  assert.deepEqual(selectReleaseHarnesses({ option: 'pi-bin, ripgrep-bin', env }).harnesses, ['pi-bin', 'ripgrep-bin']);
++  assert.deepEqual(selectReleaseHarnesses({ env }).harnesses, ['claude-code-bin']);
++});
++
++test('rejects unknown or empty selections before any build work', () => {
++  assert.throws(() => selectReleaseHarnesses({ option: 'pi-bin,pi', env: {} }), /Unknown harness: pi\. Choose from:/);
++  assert.throws(() => selectReleaseHarnesses({ option: ' , ', env: {} }), /No harness selected/);
++});
++
++test('warns when Pi is bundled without the ripgrep it searches with', () => {
++  assert.match(selectReleaseHarnesses({ option: 'pi-bin', env: {} }).warnings[0], /ripgrep-bin/);
++  assert.deepEqual(selectReleaseHarnesses({ option: 'ripgrep-bin,pi-bin', env: {} }).warnings, []);
++});

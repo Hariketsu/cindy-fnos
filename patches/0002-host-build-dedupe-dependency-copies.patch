@@ -1,31 +1,128 @@
-Subject: host build: reuse dependency copies Node already resolves from an enclosing node_modules
+Subject: host build: remove dependency copies Node never loads
 
-Why: copyPackage nests every dependency under each dependent, so identical
-packages are copied hundreds of times (tslib 554x, @aws-sdk/core 119x).
-Skipping copies Node would never load cuts the release from 297,738 to
-115,309 files without changing which package each import resolves to.
+Why: copyPackage nests every dependency under each dependent; the release had
+~298k files (24 GB on fnOS ext4 with 64 KB clusters). After the full layout is
+copied, nested copies whose nearest enclosing copy is the same source are
+removed; every import resolves as before (checked edge by edge with
+tools/release-resolution-check.mjs). Same code as the upstream PR.
 Upstream: issue https://github.com/makecindy/cindy/issues/10406, PR https://github.com/makecindy/cindy/pull/10419
-Remove when: upstream build.mjs dedupes copies along the resolution path.
+Remove when: the PR is merged and upstream.lock moves past it.
 
 diff --git a/apps/host/scripts/build.mjs b/apps/host/scripts/build.mjs
-index d17dc047..941b99b7 100644
+index 7e69b03773..237ffee248 100644
 --- a/apps/host/scripts/build.mjs
 +++ b/apps/host/scripts/build.mjs
-@@ -64,6 +64,17 @@ async function copyPackage(source, parent, ancestors = new Map()) {
-   const manifest = await readJson(path.join(source, 'package.json'));
-   if (ancestors.get(manifest.name) === source) return;
-   const destination = path.join(parent, 'node_modules', manifest.name);
-+  // Node resolves a bare specifier by walking up from the importing package. If
-+  // the nearest copy it would find on that path is this same source, reuse it
-+  // instead of nesting another identical copy; a different version in between
-+  // shadows it, so copy locally as before.
-+  for (let dir = path.dirname(parent); dir.startsWith(staging); dir = path.dirname(dir)) {
-+    if (path.basename(dir) === 'node_modules') continue;
-+    const candidate = path.join(dir, 'node_modules', manifest.name);
-+    if (!copying.has(candidate)) continue;
-+    if (copying.get(candidate) === source) return;
-+    break;
+@@ -14,6 +14,7 @@ import { build } from 'esbuild';
+ import { chromium } from 'playwright-core';
+ import { clientMigrationContract } from '../src/client-migration-contract.mjs';
+ import { selectReleaseHarnesses } from '../src/release-harnesses.mjs';
++import { redundantCopies } from '../src/release-dependency-copies.mjs';
+ 
+ const repo = fileURLToPath(new URL('../../..', import.meta.url));
+ const host = path.join(repo, 'apps/host');
+@@ -247,6 +248,12 @@ try {
+     ancestors.delete(name);
+     await copyPackage(source, staging, ancestors);
+   }
++  // With the complete layout in place, drop nested copies Node would never load
++  // because an identical copy is the nearest one above them.
++  for (const destination of redundantCopies(copying, staging)) await fs.rm(destination, { recursive: true, force: true });
++  for (const relative of dependencyRecords.keys()) {
++    if (!syncFs.existsSync(path.join(staging, relative))) dependencyRecords.delete(relative);
 +  }
-   if (copying.has(destination)) {
-     if (copying.get(destination) !== source) throw new Error(`Conflicting runtime dependency at ${destination}`);
-     return;
+   await fs.copyFile(process.execPath, path.join(bin, process.platform === 'win32' ? 'node.exe' : 'node'));
+   await fs.copyFile(path.join(repo, 'LICENSE'), path.join(staging, 'LICENSE'));
+   await fs.writeFile(path.join(staging, 'package.json'), JSON.stringify({ name: '@cindy/host-release', version: metadata.version, private: true, type: 'commonjs' }, null, 2) + '\n');
+diff --git a/apps/host/src/release-dependency-copies.mjs b/apps/host/src/release-dependency-copies.mjs
+new file mode 100644
+index 0000000000..2c977a0849
+--- /dev/null
++++ b/apps/host/src/release-dependency-copies.mjs
+@@ -0,0 +1,43 @@
++import path from 'node:path';
++
++/**
++ * Nested dependency copies in a standalone Host release that Node would never load.
++ *
++ * Node resolves a bare specifier by walking up from the importing package's
++ * directory through each enclosing `node_modules`. A copy is redundant when the
++ * nearest enclosing copy of the same package name is the same source: removing it
++ * makes every importer that found it continue upward to that identical copy, so
++ * each import still resolves to the same package. A different version in between
++ * shadows the outer copy and keeps this one.
++ *
++ * Decided on the complete layout, after every copy is placed: deciding while the
++ * tree is still being copied misses a different version written later in between.
++ *
++ * @param {Map<string, string>} copies release destination dir -> source package dir
++ * @param {string} root release root; nothing outside it is considered
++ * @returns {string[]} destinations to remove, shallowest first
++ */
++export function redundantCopies(copies, root) {
++  const redundant = [];
++  for (const [destination, source] of copies) {
++    const parts = destination.split(path.sep);
++    const at = parts.lastIndexOf('node_modules');
++    if (at < 0) continue;
++    const name = parts.slice(at + 1).join('/');
++    const parent = parts.slice(0, at).join(path.sep);
++    for (let dir = path.dirname(parent); dir === root || dir.startsWith(root + path.sep); dir = path.dirname(dir)) {
++      // The release only creates node_modules inside package roots, never directly
++      // under a `node_modules` or `@scope` directory, so there is nothing to find.
++      const base = path.basename(dir);
++      if (base !== 'node_modules' && !base.startsWith('@')) {
++        const candidate = path.join(dir, 'node_modules', ...name.split('/'));
++        if (copies.has(candidate)) {
++          if (copies.get(candidate) === source) redundant.push(destination);
++          break;
++        }
++      }
++      if (dir === root) break;
++    }
++  }
++  return redundant.sort((a, b) => a.length - b.length);
++}
+diff --git a/apps/host/src/release-dependency-copies.test.mjs b/apps/host/src/release-dependency-copies.test.mjs
+new file mode 100644
+index 0000000000..c94675dd0d
+--- /dev/null
++++ b/apps/host/src/release-dependency-copies.test.mjs
+@@ -0,0 +1,38 @@
++// Protects the dependency dedupe in scripts/build.mjs: a nested copy is removed
++// only when Node would resolve the same package from an enclosing node_modules in
++// the final layout, so every import keeps resolving to the same version.
++// Unit tier, no I/O.
++import assert from 'node:assert/strict';
++import path from 'node:path';
++import test from 'node:test';
++
++import { redundantCopies } from './release-dependency-copies.mjs';
++
++const root = path.join('/release');
++const nm = (...names) => path.join(root, ...names.flatMap(name => ['node_modules', ...name.split('/')]));
++
++test('removes nested copies whose nearest enclosing copy is the same source, shallowest first', () => {
++  const copies = new Map([
++    [nm('tslib'), '/store/tslib@2'],
++    [nm('a'), '/store/a'], [nm('a', 'tslib'), '/store/tslib@2'],
++    [nm('a', 'b'), '/store/b'], [nm('a', 'b', 'tslib'), '/store/tslib@2'],
++    [nm('@aws-sdk/core'), '/store/core@3'], [nm('a', '@aws-sdk/core'), '/store/core@3'],
++  ]);
++  assert.deepEqual(redundantCopies(copies, root), [nm('a', 'tslib'), nm('a', '@aws-sdk/core'), nm('a', 'b', 'tslib')]);
++});
++
++test('keeps a copy shadowed by a different version written later in the copy order', () => {
++  // A -> [X@2, B]; B -> [C, X@1]; C -> X@2. B/node_modules/X@1 is copied after C, and
++  // without C's own X@2, Node would resolve C's import of X to X@1.
++  const copies = new Map([
++    [nm('a'), '/store/a'], [nm('a', 'x'), '/store/x@2'], [nm('a', 'b'), '/store/b'],
++    [nm('a', 'b', 'c'), '/store/c'], [nm('a', 'b', 'c', 'x'), '/store/x@2'],
++    [nm('a', 'b', 'x'), '/store/x@1'],
++  ]);
++  assert.deepEqual(redundantCopies(copies, root), []);
++});
++
++test('never looks outside the release root', () => {
++  const copies = new Map([[path.join('/node_modules', 'tslib'), '/store/tslib@2'], [nm('a', 'tslib'), '/store/tslib@2']]);
++  assert.deepEqual(redundantCopies(copies, root), []);
++});

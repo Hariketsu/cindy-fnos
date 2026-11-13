@@ -1,0 +1,96 @@
+#!/bin/bash
+# fnOS lifecycle for Cindy: runs the Cindy Host (loopback only) and the fnOS
+# Adapter (gateway Unix socket -> Host). See docs/architecture.md.
+#
+# Layout under TRIM_APPDEST (the app's target dir):
+#   host/      Cindy Host release (bundled Node, Pi harness, Chromium)
+#   adapter/   fnOS Adapter, run with the Host's bundled Node
+#   app.sock   gateway socket created by the adapter
+
+APP="${TRIM_APPDEST}"
+HOST_DIR="${APP}/host"
+NODE="${HOST_DIR}/bin/node"
+DATA_DIR="${TRIM_PKGVAR}/profile"      # Host profile: database, credentials, tokens
+LOG_DIR="${TRIM_PKGVAR}/logs"
+RUN_DIR="${TRIM_PKGVAR}/run"
+KEY_FILE="${TRIM_PKGETC}/credential.key"
+SOCKET="${APP}/app.sock"
+
+log() { echo "$(date '+%F %T') $*" >> "${LOG_DIR}/lifecycle.log"; }
+fail() { echo "$1" > "${TRIM_TEMP_LOGFILE}"; log "ERROR: $1"; exit 1; }
+alive() { [ -s "$1" ] && kill -0 "$(head -n1 "$1" | tr -d '[:space:]')" 2>/dev/null; }
+
+# fnOS has no Secret Service; the Host reads its credential key from this file
+# (patches/0003). Generated once and kept across upgrades in TRIM_PKGETC.
+ensure_key() {
+  if [ ! -s "${KEY_FILE}" ]; then
+    ( umask 077; head -c 32 /dev/urandom | base64 > "${KEY_FILE}" ) || fail "无法生成凭据密钥文件。"
+    log "generated credential key file"
+  fi
+  chmod 600 "${KEY_FILE}"
+}
+
+host_env() {
+  export HOME="${TRIM_PKGHOME}"
+  export CINDY_HOST_DATA_DIR="${DATA_DIR}"
+  export CINDY_HOST_PORT=0                      # random loopback port, published in host-endpoint.json
+  export CINDY_HOST_REGION=cn                   # most fnOS users are in mainland China
+  export CINDY_HOST_CREDENTIAL_KEY_FILE="${KEY_FILE}"
+}
+
+start_app() {
+  mkdir -p "${DATA_DIR}" "${LOG_DIR}" "${RUN_DIR}" || fail "无法创建应用数据目录。"
+  [ -x "${NODE}" ] || fail "应用文件不完整：找不到 Cindy Host 运行时，请重新安装。"
+  ensure_key
+
+  if ! alive "${RUN_DIR}/host.pid"; then
+    log "starting host"
+    ( host_env; exec "${HOST_DIR}/cindy-host" ) >> "${LOG_DIR}/host.log" 2>&1 &
+    echo $! > "${RUN_DIR}/host.pid"
+  fi
+  if ! alive "${RUN_DIR}/adapter.pid"; then
+    log "starting adapter"
+    CINDY_FNOS_SOCKET="${SOCKET}" CINDY_FNOS_PREFIX=/app/cindy CINDY_FNOS_HOST_DATA_DIR="${DATA_DIR}" \
+      "${NODE}" "${APP}/adapter/server.mjs" >> "${LOG_DIR}/adapter.log" 2>&1 &
+    echo $! > "${RUN_DIR}/adapter.pid"
+  fi
+
+  # The adapter answers with a "starting" page until the Host publishes its endpoint,
+  # so only fail here if a process died immediately.
+  sleep 2
+  alive "${RUN_DIR}/host.pid" || fail "Cindy Host 启动失败，请查看日志：${LOG_DIR}/host.log"
+  alive "${RUN_DIR}/adapter.pid" || fail "Cindy 网关适配器启动失败，请查看日志：${LOG_DIR}/adapter.log"
+}
+
+stop_pid() {
+  local file="$1" pid count=0
+  [ -s "${file}" ] || return 0
+  pid="$(head -n1 "${file}" | tr -d '[:space:]')"
+  if kill -0 "${pid}" 2>/dev/null; then
+    kill -TERM "${pid}" 2>/dev/null
+    while kill -0 "${pid}" 2>/dev/null && [ "${count}" -lt 15 ]; do sleep 1; count=$((count + 1)); done
+    kill -0 "${pid}" 2>/dev/null && kill -KILL "${pid}" 2>/dev/null
+  fi
+  rm -f "${file}"
+}
+
+stop_app() {
+  log "stopping"
+  stop_pid "${RUN_DIR}/adapter.pid"
+  rm -f "${SOCKET}"
+  # Ask the Host to drain and stop through its own control API first.
+  if alive "${RUN_DIR}/host.pid"; then
+    ( host_env; "${HOST_DIR}/cindy-host" stop ) >> "${LOG_DIR}/host.log" 2>&1
+  fi
+  stop_pid "${RUN_DIR}/host.pid"
+}
+
+case "$1" in
+  start) start_app ;;
+  stop) stop_app ;;
+  status)
+    if alive "${RUN_DIR}/host.pid" && alive "${RUN_DIR}/adapter.pid"; then exit 0; fi
+    exit 3
+    ;;
+  *) exit 1 ;;
+esac
