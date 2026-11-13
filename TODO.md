@@ -8,7 +8,7 @@
 - [x] 在 UTM 中安装 ARM 飞牛 VM（镜像 1.2.0701），已加数据盘并创建存储空间
 - [x] 搭建过程整理成 `scripts/dev-vm/` 与 docs/development.md（`create-vm.sh` 尚未从零验证）
 - [x] 安装并授权官方 fnos-cli（随仓库提供，profile `dev-vm`）
-- [ ] 用 fnos-cli 做只读环境探测；关机克隆干净基线 `fnOS-baseline`
+- [x] 用 fnos-cli 做只读环境探测；关机克隆干净基线 `fnOS-baseline`（2026-11-13，未开机使用过）
 - [ ] 查明重启后 SSH 公钥登录失效的原因（优先级低，主要改用 fnos-cli）
 - [ ] 平台探针 fpk：网关前缀、请求头、iframe sandbox/同源、SSE 缓冲、`micro_app`/JS SDK、`fileTypes` 行为
 - [ ] 探针结论写入 `docs/fnos-platform-notes.md`
