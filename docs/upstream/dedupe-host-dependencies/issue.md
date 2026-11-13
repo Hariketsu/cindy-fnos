@@ -11,7 +11,11 @@
 
 ### 使用场景 / Use case
 
-我正在把 Cindy 打包成飞牛 NAS（fnOS）的原生应用，后台运行 `apps/host/scripts/build.mjs` 产出的独立 Host。项目和开发进度公开在 [Hariketsu/cindy-fnos](https://github.com/Hariketsu/cindy-fnos)。相关 issue：#10404。
+我正在把 Cindy 打包成飞牛 NAS（fnOS）的原生应用
+
+技术路线为：界面复用官方 Renderer，后台运行 `apps/host/scripts/build.mjs` 产出的独立 Host。
+
+项目和开发进度公开在 [Hariketsu/cindy-fnos](https://github.com/Hariketsu/cindy-fnos)。相关 issue：#10404。
 
 NAS 上安装的应用对**文件数量**很敏感。飞牛的 ext4 存储空间使用 64KB 的簇（bigalloc），每个文件至少占用 64KB。Host 产物有约 29.8 万个文件，表面大小只有约 2GB，但解压到 ext4 存储空间后实际占用约 24GB（[实测记录](https://github.com/Hariketsu/cindy-fnos/blob/main/docs/fnos-platform-notes.md#存储与文件系统)）。其他使用大簇文件系统的服务器部署也会遇到同样的问题，安装、升级、卸载时处理这么多文件也很慢。
 
