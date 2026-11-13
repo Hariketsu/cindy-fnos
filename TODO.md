@@ -13,7 +13,7 @@
 - [x] 平台探针 fpk（`tools/fnos-probe/`）：网关前缀、请求头、iframe sandbox/同源、SSE、JS SDK、打开方式入口
 - [x] 探针结论写入 `docs/fnos-platform-notes.md`
 - [ ] 查明后端 `trim.system.getPlatformConfig` 返回 403 的原因（不阻塞：前端接口可用）
-- [x] 在 OrbStack 中构建 linux-arm64 Host（只带 Pi），在 VM 中启动并检查 `/health`（`scripts/build-host.sh`；Runtime 卡在密钥环，符合预期）
+- [x] 在 OrbStack 中构建 linux-arm64 Host（只带 Pi），在 VM 中启动并检查 `/health`（`scripts/build-host.sh` 已端到端验证；Runtime 卡在密钥环，符合预期）
 
 ## P0 遗留，进入 P1 前要定
 
