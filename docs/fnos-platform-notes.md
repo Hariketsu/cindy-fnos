@@ -81,6 +81,26 @@
 | `TRIM_SYS_ARCH` | `arm` |
 | `TRIM_DATA_ACCESSIBLE_PATHS` | 启动时读取；之后通过 pickSharedFile 新增的授权**不会**更新到正在运行的进程的环境变量里，要用后端 API 查询 |
 
+## 存储与文件系统
+
+| 问题 | 实测结果 | 对 Cindy 的影响 |
+|---|---|---|
+| 存储空间（`/vol1`）文件系统 | ext4，**簇大小 64KB（bigalloc）**，块大小 4KB | 每个文件至少占 64KB。Cindy Host 构建产物有约 29.8 万个文件（表面大小 2.2GB），解压到存储空间后实际占用 **24GB**，而在系统盘（ext4，4KB）上只占 3.1GB。**不能把原样的 Host 产物装进存储空间**，必须先大幅减少文件数量（例如打包或裁剪依赖），或改装到系统分区 |
+| 用户文件区（`/vol1/1000` 等） | 使用飞牛的 ACL 权限模型，POSIX 权限位显示为 `----------`，解压出的文件**没有可执行权限** | 不能在用户目录中直接运行程序。应用的可执行文件要放在应用自己的目录（`@appcenter`）里 |
+| 系统盘（`/`） | ext4，4KB 块；安装后约 63GB，其中已用约 12GB | `install_type=root` 可以把应用装到系统分区，但真实 NAS 的系统分区可能更小，需要评估 |
+
+## Cindy Host 实测（P0）
+
+在 VM 上以普通用户身份，从系统盘手动启动上游 `cc2dc0f` 的 Host 构建产物（只打包 Pi + ripgrep）：
+
+| 检查 | 结果 |
+|---|---|
+| 启动 | 正常，监听 `127.0.0.1:3456`，`/health` 返回 ok |
+| 缺少的 harness | 正常降级：`claude-code: false, codex: false, pi: true` |
+| Runtime | `error`：「Unlock the system keyring before connecting Cindy Host.」（飞牛没有 Secret Service，符合预期） |
+| 空闲内存 | 约 620MB RSS |
+| 区域 | 默认 `global`；中国大陆账号要用 `CINDY_HOST_REGION=cn`，待验证 |
+
 ## 尚未验证
 
 - HTTPS（5667）下的行为与安全上下文

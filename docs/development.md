@@ -84,6 +84,33 @@ $F --profile dev-vm --allow-insecure-http storage pools  # 只读验证
 不建议用 SSH 跑 `appcenter-cli`：它要 root 权限，普通管理员直接运行会报 `rpcbroker: permission denied`。
 另外，飞牛账号默认没有家目录，要做 SSH 公钥登录得先用 sudo 建 `/home/<user>/.ssh`（重启后公钥登录失效的原因还没查明）。
 
+### 构建 Cindy Host
+
+```bash
+scripts/build-host.sh arm64     # 开发 VM 用；真机用 amd64
+```
+
+脚本会在 OrbStack 中创建 Debian 12 机器 `cindy-build-<arch>`（可用 `CINDY_BUILD_MACHINE` 指定已有机器），安装上游锁定的 Node 和 pnpm，拉取 `upstream.lock` 中的 commit，打上 `patches/` 里的补丁，再依次构建 Renderer 和 Host（只打包 Pi 和 ripgrep），产物输出到 `build/host/cindy-host-linux-<arch>.tar.gz`。
+
+- 用 Debian 12：飞牛基于 Debian 12（glibc 2.36），而产物里的原生模块是在构建机上编译的。
+- 首次运行时 `pnpm install` 要下载全部 harness，大约 20 分钟。
+- Host 构建需要 Playwright 的 Chromium，脚本用同版本的 `playwright-core` CLI 安装。
+- 不要把产物解压到存储空间或用户文件区来测试：前者 64KB 的簇会让占用膨胀到 24GB，后者没有可执行权限（见 [fnos-platform-notes.md](fnos-platform-notes.md)）。
+
+### 磁盘空间
+
+开发环境很占空间，Mac 上至少要留 **40GB**：
+
+| 占用 | 大小 |
+|---|---|
+| 飞牛开发 VM（`fnOS-dev`，动态磁盘） | 约 7GB 起，随写入增长 |
+| 干净基线（`fnOS-baseline`） | 约 8GB |
+| OrbStack 构建机（依赖与 harness 缓存） | 约 11GB |
+| Host 产物压缩包 | 约 0.8GB／每个架构 |
+
+- **VM 的磁盘文件只会增长，不会自动缩小。** 在 VM 里删除大量文件后，要执行 `sudo fstrim -av`，把空闲块还给 Mac（UTM 已启用 discard）。2026-11-13 曾因往存储空间解压 Host 产物，把 VM 撑到 35GB，fstrim 之后回到 6.9GB。
+- `scripts/build-host.sh` 在可用空间少于 10GB 时会拒绝运行。
+
 ### 干净基线
 
 初始化完成后关机，在 UTM 中克隆一份 `fnOS-baseline`。每次阶段验收前，从基线克隆出新的 VM 来测试。

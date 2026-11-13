@@ -61,6 +61,8 @@
 
 **验收**：探针结论写入 `docs/fnos-platform-notes.md`；Host 在飞牛 VM 中启动后 `/health` 正常。
 
+**结果（2026-11-13）**：通过。另外发现了一个新约束：存储空间的 64KB 簇让原样的 Host 产物膨胀到 24GB，Host 的打包形态要在 P1 之前确定（见 TODO.md）。
+
 ### P1 · MVP 应用包
 
 - fpk 结构：manifest、包用户、`data-share: cindy/workspace`、`cmd/main`、iframe 与 url 双入口（仅管理员）。

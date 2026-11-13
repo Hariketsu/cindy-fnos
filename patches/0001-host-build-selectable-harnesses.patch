@@ -1,0 +1,29 @@
+Subject: host build: allow selecting which agent harnesses to bundle
+
+Why: cindy-fnos bundles only Pi (plus ripgrep). Claude Code and Codex add
+~785 MB on linux-arm64 and are not shipped in the fnOS app.
+Upstream: not yet proposed. Draft issue: docs/upstream/selectable-harnesses/issue.md
+Remove when: upstream build.mjs supports choosing harnesses.
+
+diff --git a/apps/host/scripts/build.mjs b/apps/host/scripts/build.mjs
+index 5507a818..d17dc047 100644
+--- a/apps/host/scripts/build.mjs
++++ b/apps/host/scripts/build.mjs
+@@ -184,7 +184,16 @@ try {
+ 
+   // Copy the verified checkout runtimes with their own support files. A missing
+   // harness is a build error, never a release claiming an unavailable agent.
+-  for (const name of ['claude-code-bin', 'codex-package-bin', 'pi-bin', 'ripgrep-bin']) {
++  // CINDY_HOST_HARNESSES (comma-separated) narrows the set for distributions
++  // that ship fewer agents; unset keeps every harness.
++  const allHarnesses = ['claude-code-bin', 'codex-package-bin', 'pi-bin', 'ripgrep-bin'];
++  const selectedHarnesses = process.env.CINDY_HOST_HARNESSES
++    ? process.env.CINDY_HOST_HARNESSES.split(',').map(name => name.trim()).filter(Boolean)
++    : allHarnesses;
++  const unknownHarnesses = selectedHarnesses.filter(name => !allHarnesses.includes(name));
++  if (unknownHarnesses.length) throw new Error(`Unknown harness in CINDY_HOST_HARNESSES: ${unknownHarnesses.join(', ')}`);
++  metadata.harnesses = selectedHarnesses;
++  for (const name of selectedHarnesses) {
+     await fs.cp(path.join(repo, 'apps', name, platformKey), path.join(resources, 'harnesses', name, platformKey), {
+       recursive: true, dereference: true,
+     });

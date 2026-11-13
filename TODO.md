@@ -13,7 +13,14 @@
 - [x] 平台探针 fpk（`tools/fnos-probe/`）：网关前缀、请求头、iframe sandbox/同源、SSE、JS SDK、打开方式入口
 - [x] 探针结论写入 `docs/fnos-platform-notes.md`
 - [ ] 查明后端 `trim.system.getPlatformConfig` 返回 403 的原因（不阻塞：前端接口可用）
-- [ ] 在 OrbStack 中构建 linux-arm64 Host（只带 Pi），在 VM 中启动并检查 `/health`
+- [x] 在 OrbStack 中构建 linux-arm64 Host（只带 Pi），在 VM 中启动并检查 `/health`（`scripts/build-host.sh`；Runtime 卡在密钥环，符合预期）
+
+## P0 遗留，进入 P1 前要定
+
+- [ ] **Host 的打包形态**：存储空间的 64KB 簇使 Host 产物（约 29.8 万个文件）占用 24GB。候选方案：减少文件数量（把依赖打包成少量文件，或裁剪依赖）／改装到系统分区（`install_type=root`）／把运行时放进单个镜像文件。需要评估后与用户讨论
+- [ ] 产物瘦身：`pi-ai` 依赖的 `@aws-sdk` 约 415MB、`claude-agent-sdk` 自带约 326MB 的 Claude 原生二进制（未打包 Claude Code 时用不上）
+- [ ] 补丁：从文件注入凭据密钥（Runtime 目前卡在「Unlock the system keyring」）
+- [ ] 验证中国大陆账号需要的 `CINDY_HOST_REGION=cn`
 
 ## 下一阶段
 
@@ -25,9 +32,9 @@
 
 | 事项 | 状态 |
 |---|---|
+| 构建时可选 harness | 本地补丁 `patches/0001`；issue 草稿待用户审阅 |
 | 子路径部署（base path） | 未提 |
 | 从文件注入凭据密钥 | 未提 |
-| 构建时可选 harness | 未提 |
 | Web 首次登录 API | 未提 |
 | Host 手机号登录 | 待实测 |
 | Host 本地模式（无账号） | 未提 |
