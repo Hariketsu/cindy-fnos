@@ -102,6 +102,18 @@
 | 空闲内存 | 约 620MB RSS |
 | 区域 | 默认 `global`；中国大陆账号要用 `CINDY_HOST_REGION=cn`，待验证 |
 
+## Host 产物裁剪（2026-11-13，构建机上测量）
+
+`scripts/prune-host.mjs` 删除运行时不会加载的文件：类型声明、source map、Markdown、包根目录下的测试和示例、Node 不会解析到的 `dist-es` 副本；未打包 Claude Code 时，还会删除 `claude-agent-sdk` 自带的 Claude 原生二进制。许可证文件全部保留。
+
+| | 文件数 | 表面大小 | ext4（64KB 簇）估算 |
+|---|---|---|---|
+| 上游原始产物 | 297,738 | 1958MiB | 约 20GB（实测 24GB） |
+| 裁剪后 | 86,761 | 1213MiB | 约 6.3GB |
+| 裁剪后，重复文件改为硬链接（推算） | 86,761（不同内容只有 10,898 份） | 950MiB | 约 1.6GB |
+
+剩下的文件大多是重复副本：上游 `build.mjs` 复制依赖时不做去重，每个依赖的子依赖都在自己目录下完整复制一份。例如 AWS SDK 的 `credential-provider-node` 下，`tslib` 有 554 份，`@aws-sdk/core` 有 119 份。
+
 ## 官方文档与社区做法（2026-11-13 调研）
 
 - **官方开发者文档没有提到**存储空间的文件系统、簇大小或小文件问题。Native 示例只在打包时排除 `node_modules`，再执行 `npm install --omit=dev`。
