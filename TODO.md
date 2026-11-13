@@ -34,7 +34,7 @@
 | 事项 | 状态 |
 |---|---|
 | 构建时可选 harness | 本地补丁 `patches/0001`；issue 已提交 [#10404](https://github.com/makecindy/cindy/issues/10404) |
-| 依赖复制去重 | 本地补丁 `patches/0002`；issue 草稿待用户审阅 |
+| 依赖复制去重 | 本地补丁 `patches/0002`；issue 已提交 [#10406](https://github.com/makecindy/cindy/issues/10406) |
 | 子路径部署（base path） | 未提 |
 | 从文件注入凭据密钥 | 未提 |
 | Web 首次登录 API | 未提 |

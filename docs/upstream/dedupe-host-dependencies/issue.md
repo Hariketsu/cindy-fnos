@@ -1,6 +1,6 @@
 # Issue 草稿：Host 构建复制依赖时去掉 Node 不会用到的重复副本
 
-> 状态：**草稿，待用户审阅**，未提交。
+> 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/issues/10406
 > 模板：上游 `.github/ISSUE_TEMPLATE/feature_request.yml`（功能建议）
 > 上游基线：`makecindy/cindy@cc2dc0f`
 > 本地补丁：`patches/0002-host-build-dedupe-dependency-copies.patch`

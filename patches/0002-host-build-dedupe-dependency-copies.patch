@@ -4,7 +4,7 @@ Why: copyPackage nests every dependency under each dependent, so identical
 packages are copied hundreds of times (tslib 554x, @aws-sdk/core 119x).
 Skipping copies Node would never load cuts the release from 297,738 to
 115,309 files without changing which package each import resolves to.
-Upstream: not yet proposed. Draft issue: docs/upstream/dedupe-host-dependencies/issue.md
+Upstream: https://github.com/makecindy/cindy/issues/10406
 Remove when: upstream build.mjs dedupes copies along the resolution path.
 
 diff --git a/apps/host/scripts/build.mjs b/apps/host/scripts/build.mjs
