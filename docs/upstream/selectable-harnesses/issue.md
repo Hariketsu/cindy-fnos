@@ -1,6 +1,6 @@
 # Issue 草稿：Host 构建时可选择打包哪些 harness
 
-> 状态：**草稿，待用户审阅**，未提交。
+> 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/issues/10404
 > 模板：上游 `.github/ISSUE_TEMPLATE/feature_request.yml`（功能建议）
 > 上游基线：`makecindy/cindy@cc2dc0f`
 

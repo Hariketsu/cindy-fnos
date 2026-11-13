@@ -119,7 +119,7 @@ scripts/build-host.sh arm64     # 开发 VM 用；真机用 amd64
 
 ### 干净基线
 
-初始化完成后关机，在 UTM 中克隆一份 `fnOS-baseline`。每次阶段验收前，从基线克隆出新的 VM 来测试。
+初始化完成后关机，在 UTM 中克隆一份基线。当前基线是 `fnOS-baseline-btrfs`（2026-11-13，只有 btrfs 存储空间、没有第三方应用）。每次阶段验收前，从基线克隆出新的 VM 来测试。
 
 ### 本项目使用的 VM
 

@@ -2,7 +2,7 @@ Subject: host build: allow selecting which agent harnesses to bundle
 
 Why: cindy-fnos bundles only Pi (plus ripgrep). Claude Code and Codex add
 ~785 MB on linux-arm64 and are not shipped in the fnOS app.
-Upstream: not yet proposed. Draft issue: docs/upstream/selectable-harnesses/issue.md
+Upstream: https://github.com/makecindy/cindy/issues/10404
 Remove when: upstream build.mjs supports choosing harnesses.
 
 diff --git a/apps/host/scripts/build.mjs b/apps/host/scripts/build.mjs

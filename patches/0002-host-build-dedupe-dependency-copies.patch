@@ -1,0 +1,31 @@
+Subject: host build: reuse dependency copies Node already resolves from an enclosing node_modules
+
+Why: copyPackage nests every dependency under each dependent, so identical
+packages are copied hundreds of times (tslib 554x, @aws-sdk/core 119x).
+Skipping copies Node would never load cuts the release from 297,738 to
+115,309 files without changing which package each import resolves to.
+Upstream: not yet proposed. Draft issue: docs/upstream/dedupe-host-dependencies/issue.md
+Remove when: upstream build.mjs dedupes copies along the resolution path.
+
+diff --git a/apps/host/scripts/build.mjs b/apps/host/scripts/build.mjs
+index d17dc047..941b99b7 100644
+--- a/apps/host/scripts/build.mjs
++++ b/apps/host/scripts/build.mjs
+@@ -64,6 +64,17 @@ async function copyPackage(source, parent, ancestors = new Map()) {
+   const manifest = await readJson(path.join(source, 'package.json'));
+   if (ancestors.get(manifest.name) === source) return;
+   const destination = path.join(parent, 'node_modules', manifest.name);
++  // Node resolves a bare specifier by walking up from the importing package. If
++  // the nearest copy it would find on that path is this same source, reuse it
++  // instead of nesting another identical copy; a different version in between
++  // shadows it, so copy locally as before.
++  for (let dir = path.dirname(parent); dir.startsWith(staging); dir = path.dirname(dir)) {
++    if (path.basename(dir) === 'node_modules') continue;
++    const candidate = path.join(dir, 'node_modules', manifest.name);
++    if (!copying.has(candidate)) continue;
++    if (copying.get(candidate) === source) return;
++    break;
++  }
+   if (copying.has(destination)) {
+     if (copying.get(destination) !== source) throw new Error(`Conflicting runtime dependency at ${destination}`);
+     return;
