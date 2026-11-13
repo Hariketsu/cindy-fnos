@@ -87,6 +87,7 @@
 |---|---|---|
 | 存储空间（`/vol1`）文件系统 | ext4，**簇大小 64KB（bigalloc）**，块大小 4KB | 每个文件至少占 64KB。Cindy Host 构建产物有约 29.8 万个文件（表面大小 2.2GB），解压到存储空间后实际占用 **24GB**，而在系统盘（ext4，4KB）上只占 3.1GB。**不能把原样的 Host 产物装进存储空间**，必须先大幅减少文件数量（例如打包或裁剪依赖），或改装到系统分区 |
 | 用户文件区（`/vol1/1000` 等） | 使用飞牛的 ACL 权限模型，POSIX 权限位显示为 `----------`，解压出的文件**没有可执行权限** | 不能在用户目录中直接运行程序。应用的可执行文件要放在应用自己的目录（`@appcenter`）里 |
+| btrfs 存储空间 | 用户可以在创建存储空间时选择 btrfs；挂载参数 `discard=async,trimacl,space_cache=v2` | 小文件的空间利用率远高于 64KB 簇的 ext4（实测数据见下文） |
 | 系统盘（`/`） | ext4，4KB 块；安装后约 63GB，其中已用约 12GB | `install_type=root` 可以把应用装到系统分区，但真实 NAS 的系统分区可能更小，需要评估 |
 
 ## Cindy Host 实测（P0）
@@ -100,6 +101,14 @@
 | Runtime | `error`：「Unlock the system keyring before connecting Cindy Host.」（飞牛没有 Secret Service，符合预期） |
 | 空闲内存 | 约 620MB RSS |
 | 区域 | 默认 `global`；中国大陆账号要用 `CINDY_HOST_REGION=cn`，待验证 |
+
+## 官方文档与社区做法（2026-11-13 调研）
+
+- **官方开发者文档没有提到**存储空间的文件系统、簇大小或小文件问题。Native 示例只在打包时排除 `node_modules`，再执行 `npm install --omit=dev`。
+- 社区应用都没有专门处理这个问题：
+  - [javen-yan/deepseek-harness-fnos](https://github.com/javen-yan/deepseek-harness-fnos) 在 fpk 中只放一个 `runtime-linux-<arch>.tgz`，安装时校验 sha256 后解压到 `TRIM_APPDEST/runtime`。这减少了安装包内部的文件数，但解压后仍是完整的 `node_modules` 文件树。
+  - [techysy/deepseek-harness-fnos](https://github.com/techysy/deepseek-harness-fnos) 直接内置离线 `node_modules`（fpk 约 120MB）。
+  - 它们的依赖规模比 Cindy Host（约 30 万个文件）小一个量级，所以问题不明显。
 
 ## 尚未验证
 

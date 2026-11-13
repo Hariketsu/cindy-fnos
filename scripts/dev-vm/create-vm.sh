@@ -16,13 +16,13 @@ if utmctl list 2>/dev/null | awk '{print $3}' | grep -qx "$NAME"; then
 fi
 
 ISO_ABS=$(cd "$(dirname "$ISO")" && pwd)/$(basename "$ISO")
-echo "Creating $NAME (aarch64, hvf, 4 CPU, 8 GB, system 64 GB + data 64 GB)..."
+echo "Creating $NAME (aarch64, hvf, 4 CPU, 8 GB, system 64 GB + 2 x data 64 GB)..."
 osascript - "$ISO_ABS" "$NAME" <<'OSA'
 on run argv
   set iso to POSIX file (item 1 of argv)
   with timeout of 600 seconds
     tell application "UTM"
-      make new virtual machine with properties {backend:qemu, configuration:{name:(item 2 of argv), architecture:"aarch64", memory:8192, cpu cores:4, displays:{{hardware:"VGA"}}, network interfaces:{{mode:shared, hardware:"e1000"}}, drives:{{removable:true, source:iso}, {guest size:65536}, {guest size:65536}}}}
+      make new virtual machine with properties {backend:qemu, configuration:{name:(item 2 of argv), architecture:"aarch64", memory:8192, cpu cores:4, displays:{{hardware:"VGA"}}, network interfaces:{{mode:shared, hardware:"e1000"}}, drives:{{removable:true, source:iso}, {guest size:65536}, {guest size:65536}, {guest size:65536}}}}
     end tell
   end timeout
 end run
