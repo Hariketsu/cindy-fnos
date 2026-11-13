@@ -64,6 +64,7 @@ pnpm --filter desktop exec vite build --config vite.renderer.config.ts
 
 rm -rf \$HOME/out && mkdir -p \$HOME/out
 CINDY_HOST_HARNESSES=$HARNESSES pnpm --filter @cindy/host build --output \$HOME/out/cindy-host
+node '$ROOT/scripts/prune-host.mjs' \$HOME/out/cindy-host   # see docs/fnos-platform-notes.md
 tar -C \$HOME/out -cf - cindy-host | gzip -1 > '$OUT/cindy-host-linux-$ARCH.tar.gz'
 "
 echo "Built $OUT/cindy-host-linux-$ARCH.tar.gz (upstream $COMMIT)"
