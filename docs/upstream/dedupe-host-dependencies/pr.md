@@ -1,7 +1,7 @@
 # PR 草稿：Host 构建复制依赖时，复用 Node 已能解析到的副本
 
-> 状态：**草稿，待用户审阅**，未提交。验证结果中标「待补」的部分，会在构建机空闲后补上实测数据。
-> 关联 issue：makecindy/cindy#10406（截至写稿时还没有回复；建议等分诊意见后再提交）
+> 状态：**草稿，待用户审阅**，未提交。验证数据均为实测（2026-11-13，linux-arm64，Debian 12，基于 `f58aada`）。
+> 关联 issue：makecindy/cindy#10406（分诊机器人已表示方向接受，并给出实现与验收要求，本 PR 均已按要求处理）
 > 分支：本地 `.upstream/cindy` 中的 `perf/host-dedupe-dependency-copies`，基于上游 `main`（`f58aada`），1 个 commit，带 DCO 签名
 > 模板：上游 `.github/PULL_REQUEST_TEMPLATE.md`
 
@@ -26,7 +26,7 @@
 - 关联 Issue / 需求：Closes #10406
 - 本 PR 包含：
   - 新增 `apps/host/src/release-dependency-copies.mjs`：判断某个副本是否多余（`resolvesToExistingCopy`）；
-  - `build.mjs` 的 `copyPackage` 在复制前调用它；
+  - `build.mjs` 的 `copyPackage` 在复制前调用它；按分诊建议，向上查找时跳过 `node_modules` 和 `@scope` 目录（构建脚本从不在它们下面创建 `node_modules`），边界判断使用 `dir === root || dir.startsWith(root + path.sep)`，原有的循环依赖检查保持不变；
   - 新增单元测试 `apps/host/src/release-dependency-copies.test.mjs`。
 - 明确不包含：提升（hoist）依赖；删除类型声明、source map 等文件；Host 运行时的任何改动。
 - 用户可见变化：Host 发行包的文件数和体积显著减少，运行行为不变。
@@ -46,7 +46,7 @@
 cd apps/host && node --test src/release-dependency-copies.test.mjs
 结果：3 pass，0 fail
 pnpm --filter @cindy/host test
-结果：待补
+结果：285 pass，0 fail
 ```
 
 测试价值（`release-dependency-copies.test.mjs`）
@@ -57,14 +57,28 @@ pnpm --filter @cindy/host test
 
 ### 手工验证
 
-在 linux-arm64（Debian 12）上分别用 `main` 和本分支完整构建 Host 发行包（`cc2dc0f` 上的实测数据；本分支的数据待补）：
+在 linux-arm64（Debian 12）上分别用 `main`（`f58aada`）和本分支完整构建 Host 发行包，两者都打包全部四个 harness：
 
 | | 文件数 | 表面大小 |
 |---|---|---|
-| `main` | 297,738 | 1958MiB |
-| 本分支 | 115,309 | 1542MiB |
+| `main` | 297,789 | 2743MiB |
+| 本分支 | 115,360 | 2326MiB |
 
-两份产物都能启动，`/health` 一致。对 `@aws-sdk/client-bedrock-runtime`、`openai`、`@google/genai`、`@modelcontextprotocol/sdk`、`@anthropic-ai/claude-agent-sdk`、`better-sqlite3`、`sharp`、`node-pty`、`exceljs`、`drizzle-orm`、`remark-gfm`、`playwright-core` 逐个做动态导入，两份产物的结果完全一致。
+两份产物都能启动，`/health` 中四个 harness 均为可用。对 `@aws-sdk/client-bedrock-runtime`、`openai`、`@google/genai`、`@modelcontextprotocol/sdk`、`@anthropic-ai/claude-agent-sdk`、`better-sqlite3`、`sharp`、`node-pty`、`exceljs`、`drizzle-orm`、`remark-gfm`、`playwright-core` 逐个做动态导入，两份产物都是 12 个全部成功。
+
+
+另外按 #10406 分诊意见中的验收要求，对构建产物运行了上游的进程级验收与清单检查：
+
+```text
+CINDY_TEST_HOST_RELEASE=<构建目录> node apps/host/scripts/lifecycle.e2e.mjs
+结果：exit 0
+PASS: installed Host start, duplicate exclusion, authenticated managed stop, signal shutdown and restart
+PASS: background Host survives launcher exit; replacement launcher attaches to the same process and instance
+```
+
+- `SHA256SUMS.json`：对产物中每个文件重新计算 SHA256，全部一致。
+- `runtime-dependencies.json`：`main` 有 4189 条，本分支为 1724 条；每条记录对应的目录都存在、版本与 `package.json` 一致，产物中也没有未被记录的包。
+- 同样的检查在 `main` 的构建产物上也全部通过，作为对照。
 
 ### 未执行的验证
 
@@ -89,5 +103,5 @@ pnpm --filter @cindy/host test
 - [x] UI 改动已在「UI 变化」注明引用的设计规范章节（不涉及）
 - [x] 未提交凭证、令牌或授权文件
 - [x] 已核对受影响的文档：`copyPackage` 的注释已同步更新
-- [ ] 已确认测试结果或说明未执行原因（待补完整测试结果）
+- [x] 已确认测试结果或说明未执行原因
 - [x] 不涉及数据读取、通知刷新或常驻组件

@@ -1,6 +1,6 @@
 # PR 草稿：Host 构建时可选择打包哪些 harness
 
-> 状态：**草稿，待用户审阅**，未提交。验证结果中标「待补」的部分，会在构建机空闲后补上实测数据。
+> 状态：**草稿，待用户审阅**，未提交。验证数据均为实测（2026-11-13，linux-arm64，Debian 12，基于 `f58aada`）。
 > 关联 issue：makecindy/cindy#10404（分诊机器人已表示方向接受，并给出实现建议，本 PR 按建议实现）
 > 分支：本地 `.upstream/cindy` 中的 `feat/host-selectable-harnesses`，基于上游 `main`（`f58aada`），1 个 commit，带 DCO 签名
 > 模板：上游 `.github/PULL_REQUEST_TEMPLATE.md`
@@ -46,7 +46,7 @@
 cd apps/host && node --test src/release-harnesses.test.mjs
 结果：4 pass，0 fail
 pnpm --filter @cindy/host test
-结果：待补
+结果：286 pass，0 fail
 ```
 
 测试价值（`release-harnesses.test.mjs`）
@@ -57,14 +57,29 @@ pnpm --filter @cindy/host test
 
 ### 手工验证
 
-在 linux-arm64（Debian 12）上用本分支完整构建 Host 发行包（待补实测）：
+在 linux-arm64（Debian 12，基于 `f58aada` 加本 commit）上完整构建 Host 发行包：
 
-1. 不传参数：`resources/harnesses/` 下包含全部四项，`release.json` 的 `harnesses` 为全部四项。
-2. `--harnesses pi-bin,ripgrep-bin`：只包含这两项，`release.json` 与之一致，`SHA256SUMS.json` 中没有其他 harness 的条目。
-3. 只设置 `CINDY_HOST_HARNESSES=pi-bin,ripgrep-bin`：结果同 2。
-4. `--harnesses pi-bin`：构建继续，并打印缺少 ripgrep 的警告。
-5. `--harnesses pi`：在开始构建前立即失败。
-6. 用第 2 步的产物启动 Host：`/health` 报告 `harness: { "claude-code": false, "codex": false, "pi": true }`。
+| 构建方式 | 结果 |
+|---|---|
+| `--harnesses pi` | 1 秒内报错 `Unknown harness: pi. Choose from: …`，不做任何构建 |
+| `--harnesses pi-bin,ripgrep-bin` | `resources/harnesses/` 只有 `pi-bin`、`ripgrep-bin`；`release.json` 的 `harnesses` 与之一致；`SHA256SUMS.json` 中只有这两个 harness 的条目，`sha256sum -c` 全部通过；启动 Host 后 `/health` 为 `harness: { "claude-code": false, "codex": false, "pi": true }` |
+| `CINDY_HOST_HARNESSES=pi-bin,ripgrep-bin` | 与上一行相同 |
+| 不指定 | 四个 harness 全部打包，`release.json` 列出全部四项，与改动前一致 |
+| `--harnesses pi-bin` | 打印 `Warning: pi-bin is selected without ripgrep-bin; …`，构建继续，只打包 `pi-bin` |
+
+
+另外参照上游已有的验收方式，对构建产物运行了上游的进程级验收与清单检查：
+
+```text
+CINDY_TEST_HOST_RELEASE=<构建目录> node apps/host/scripts/lifecycle.e2e.mjs
+结果：exit 0
+PASS: installed Host start, duplicate exclusion, authenticated managed stop, signal shutdown and restart
+PASS: background Host survives launcher exit; replacement launcher attaches to the same process and instance
+```
+
+- `SHA256SUMS.json`：对产物中每个文件重新计算 SHA256，全部一致。
+- `runtime-dependencies.json`：每条记录对应的目录都存在、版本与 `package.json` 一致，产物中也没有未被记录的包。
+- 同样的检查在 `main` 的构建产物上也全部通过，作为对照。
 
 ### 未执行的验证
 
@@ -88,5 +103,5 @@ pnpm --filter @cindy/host test
 - [x] UI 改动已在「UI 变化」注明引用的设计规范章节（不涉及）
 - [x] 未提交凭证、令牌或授权文件
 - [x] 已核对受影响的文档：构建命令只在 `build.mjs` 的用法提示中出现，已同步更新
-- [ ] 已确认测试结果或说明未执行原因（待补完整测试结果）
+- [x] 已确认测试结果或说明未执行原因
 - [x] 不涉及数据读取、通知刷新或常驻组件
