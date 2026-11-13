@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Run the official fnpack (pinned version), downloading it into .cache/tools on first use.
+# Source: https://developer.fnnas.com/docs/cli/fnpack
+set -euo pipefail
+VERSION=1.2.3
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+case "$(uname -s)-$(uname -m)" in
+  Darwin-arm64) PLAT=darwin-arm64 ;; Darwin-x86_64) PLAT=darwin-amd64 ;;
+  Linux-aarch64) PLAT=linux-arm64 ;;  Linux-x86_64) PLAT=linux-amd64 ;;
+  *) echo "unsupported platform: $(uname -s)-$(uname -m)" >&2; exit 1 ;;
+esac
+BIN=$ROOT/.cache/tools/fnpack-$VERSION-$PLAT
+if [[ ! -x $BIN ]]; then
+  mkdir -p "$(dirname "$BIN")"
+  echo "Downloading fnpack $VERSION ($PLAT)..." >&2
+  curl -fsSL "https://static2.fnnas.com/fnpack/fnpack-$VERSION-$PLAT" -o "$BIN.tmp"
+  chmod +x "$BIN.tmp" && mv "$BIN.tmp" "$BIN"
+fi
+exec "$BIN" "$@"

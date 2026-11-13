@@ -10,8 +10,10 @@
 - [x] 安装并授权官方 fnos-cli（随仓库提供，profile `dev-vm`）
 - [x] 用 fnos-cli 做只读环境探测；关机克隆干净基线 `fnOS-baseline`（2026-11-13，未开机使用过）
 - [ ] 查明重启后 SSH 公钥登录失效的原因（优先级低，主要改用 fnos-cli）
-- [ ] 平台探针 fpk：网关前缀、请求头、iframe sandbox/同源、SSE 缓冲、`micro_app`/JS SDK、`fileTypes` 行为
-- [ ] 探针结论写入 `docs/fnos-platform-notes.md`
+- [x] 平台探针 fpk（`tools/fnos-probe/`）：网关前缀、请求头、iframe sandbox/同源、SSE、JS SDK、打开方式入口
+- [x] 探针结论写入 `docs/fnos-platform-notes.md`
+- [ ] 查明后端 `trim.system.getPlatformConfig` 返回 403 的原因（不阻塞：前端接口可用）
+- [ ] 决定开发 VM 是否关闭系统自动更新（已从 1.2.0701 自动升级到 1.2.1010）
 - [ ] 在 OrbStack 中构建 linux-arm64 Host（只带 Pi），在 VM 中启动并检查 `/health`
 
 ## 下一阶段

@@ -27,8 +27,8 @@
                                                                     ▼
                                 ┌──────────────── fnOS Adapter（本项目，Node，包用户）────────────────┐
                                 │ 身份：只放行 X-Trim-Isadmin=true                                      │
-                                │ 路由：适配 /app/cindy 前缀                                            │
-                                │ 代理：改写 Host/Origin、注入 Host bearer、按飞牛窗口调整 iframe 策略、SSE 不缓冲 │
+                                │ 路由：去掉 /app/cindy 前缀（实测网关不剥离）                          │
+                                │ 代理：改写 Host/Origin、注入 Host bearer、按飞牛窗口调整 iframe 策略 │
                                 │ 页面：首次登录、未就绪页与错误页、文件交接页                          │
                                 │ 注入：fnos-bridge.js（在 Cindy shim 之后加载）                        │
                                 └──────────────────────────────┬───────────────────────────────────────┘
@@ -92,5 +92,5 @@ Cindy 最初是纯桌面产品，业务逻辑大量直接调用 Electron API。�
 
 - 飞牛网关只校验「已登录 NAS」；Adapter 再校验「是管理员」；Host bearer 只保存在服务端，不暴露给浏览器。
 - Agent 以包用户身份运行，不用 root，不加入额外的用户组；只能访问 `cindy/workspace` 和管理员授权的目录。
-- Cindy 页面与飞牛桌面可能同源，Adapter 必须设置严格的 CSP；Agent 生成的 HTML 继续使用上游的沙箱渲染。
+- **实测：Cindy 页面与飞牛桌面同源，iframe 也没有 sandbox**（见 [fnos-platform-notes.md](fnos-platform-notes.md)）。Cindy 页面中的脚本可以访问飞牛桌面，相当于拿到了当前用户的飞牛会话。因此 Adapter 必须设置严格的 CSP，Agent 生成的 HTML 必须继续使用上游的沙箱渲染，不能放宽。
 - 凭据与 API Key 只以加密形式保存在应用数据目录中，不进入日志、仓库或前端。

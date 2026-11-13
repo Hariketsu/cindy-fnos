@@ -1,0 +1,14 @@
+{
+  "data-share": {
+    "shares": [
+      { "name": "cindyprobe" },
+      { "name": "cindyprobe/reports" }
+    ]
+  },
+  "api-scope": [
+    "trim.system.getPlatformConfig",
+    "trim.file.path",
+    "trim.file.sharedAccess",
+    "trim.file.userAccess"
+  ]
+}

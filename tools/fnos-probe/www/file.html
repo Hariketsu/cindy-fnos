@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>Cindy Probe · 打开方式</title></head>
+<body>
+<h1>打开方式入口</h1>
+<pre id="out"></pre>
+<script>
+  // Records what fnOS passes when a file is opened through the "open with" entry.
+  const payload = { tag: 'file', href: location.href, search: location.search,
+    params: Object.fromEntries(new URLSearchParams(location.search)), inIframe: window.top !== window, at: new Date().toISOString() };
+  document.getElementById('out').textContent = JSON.stringify(payload, null, 2);
+  fetch('/app/cindyprobe/api/report', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+</script>
+</body>
+</html>

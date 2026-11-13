@@ -1,0 +1,37 @@
+{
+  ".url": {
+    "cindyprobe.main": {
+      "title": "Cindy Probe",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "protocol": "",
+      "gatewayPrefix": "/app/cindyprobe",
+      "gatewaySocket": "app.sock",
+      "url": "/app/cindyprobe/?entry=main",
+      "allUsers": false
+    },
+    "cindyprobe.tab": {
+      "title": "Cindy Probe (Tab)",
+      "icon": "images/icon_{0}.png",
+      "type": "url",
+      "protocol": "",
+      "gatewayPrefix": "/app/cindyprobe",
+      "gatewaySocket": "app.sock",
+      "url": "/app/cindyprobe/?entry=tab",
+      "allUsers": false
+    },
+    "cindyprobe.file": {
+      "title": "交给 Cindy Probe",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "protocol": "",
+      "gatewayPrefix": "/app/cindyprobe",
+      "gatewaySocket": "app.sock",
+      "url": "/app/cindyprobe/file.html",
+      "allUsers": false,
+      "fileTypes": ["txt", "md"],
+      "noDisplay": true,
+      "control": { "accessPerm": "editable" }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cindy fnOS Probe</title>
+<style>
+  body { font: 13px/1.5 -apple-system, system-ui, sans-serif; margin: 16px; }
+  button { margin: 0 8px 8px 0; }
+  pre { background: #f4f4f4; padding: 8px; white-space: pre-wrap; word-break: break-all; }
+  #status { font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>Cindy fnOS Probe</h1>
+<p id="status">running…</p>
+<div>
+  <button id="pick-shared">pickSharedFile（目录）</button>
+  <button id="pick-user">pickUserFile（目录）</button>
+  <button id="open-fm">openFileManager</button>
+  <button id="sse-idle">SSE 空闲 70 秒测试</button>
+</div>
+<pre id="out"></pre>
+<!-- Absolute path: the entry may be opened as /app/cindyprobe without a trailing slash. -->
+<script type="module" src="/app/cindyprobe/probe.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+appname=cindyprobe
+version=0.1.0
+display_name=Cindy Probe
+desc=Development probe for the Cindy for fnOS project. Records gateway, iframe, SSE and JS SDK behavior. Not for end users.
+platform=all
+source=thirdparty
+maintainer=cindy-fnos
+distributor=cindy-fnos
+os_min_version=1.2.0401
+desktop_uidir=ui
+desktop_applaunchname=cindyprobe.main
+ctl_stop=true
+micro_app=true
