@@ -1,0 +1,20 @@
+# Local machine config (VM IP, accounts, keys)
+.env.local
+.env*.local
+
+# Local caches and third-party snapshots
+.cache/
+
+# Upstream checkout and build outputs
+.upstream/
+build/
+dist/
+*.fpk
+
+# VM images
+*.iso
+*.qcow2
+*.utm/
+
+node_modules/
+.DS_Store
