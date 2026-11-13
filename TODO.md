@@ -34,15 +34,15 @@
 
 | 事项 | 状态 |
 |---|---|
-| 构建时可选 harness | 本地补丁 `patches/0001`；issue 已提交 [#10404](https://github.com/makecindy/cindy/issues/10404) |
-| 依赖复制去重 | 本地补丁 `patches/0002`；issue 已提交 [#10406](https://github.com/makecindy/cindy/issues/10406) |
+| 构建时可选 harness | 本地补丁 `patches/0001`；issue [#10404](https://github.com/makecindy/cindy/issues/10404)，PR [#10418](https://github.com/makecindy/cindy/pull/10418) 待审 |
+| 依赖复制去重 | 本地补丁 `patches/0002`；issue [#10406](https://github.com/makecindy/cindy/issues/10406)，PR [#10419](https://github.com/makecindy/cindy/pull/10419) 待审 |
 | 子路径部署（base path） | 未提 |
-| 从文件注入凭据密钥 | 本地补丁 `patches/0003`；issue 草稿待用户审阅 |
+| 从文件注入凭据密钥 | 本地补丁 `patches/0003`；issue [#10417](https://github.com/makecindy/cindy/issues/10417) 待分诊 |
 | Web 首次登录 API | 未提 |
 | Host 手机号登录 | 待实测 |
 | Host 本地模式（无账号） | 未提 |
 
-流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/`，经用户审阅后提交。节奏还没定（逐项提交，还是 P0 结束后汇总）。
+流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/`，经用户审阅后提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交。
 
 ## 暂缓的决定
 

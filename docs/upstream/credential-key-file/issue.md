@@ -1,6 +1,6 @@
 # Issue 草稿：无 Secret Service 的 Linux 环境下，Host 可从文件读取凭据密钥
 
-> 状态：**草稿，待用户审阅**，未提交。
+> 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/issues/10417
 > 模板：上游 `.github/ISSUE_TEMPLATE/feature_request.yml`（功能建议）
 > 上游基线：`makecindy/cindy@cc2dc0f`
 > 本地补丁：`patches/0003-host-credential-key-file.patch`（已实现；上游 Host 测试 284/284 通过；已在飞牛 VM 上验证）
