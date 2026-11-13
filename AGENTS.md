@@ -1,12 +1,14 @@
 # Cindy for fnOS：Agent 工作入口
 
 本仓库把上游 [Cindy](https://github.com/makecindy/cindy) 的原版 Renderer 与无界面 Host 打包为飞牛 fnOS 原生应用。
-开始前先读 [docs/architecture.md](docs/architecture.md)，了解当前进度读 [TODO.md](TODO.md)。
+开始前先读最新的交接文档（[handoff/](handoff/)）、[TODO.md](TODO.md) 和 [docs/architecture.md](docs/architecture.md)。
+
+本机环境与个人约定见 @AGENTS.local.md（不入库；新维护者参照 [AGENTS.local.example.md](AGENTS.local.example.md) 自建）。
 
 ## 仓库边界
 
 - 本仓库只包含飞牛适配：`adapter/`、`bridge/`、`fpk/`、`patches/`、`scripts/`、`tests/`、`docs/`。
-- **不 fork、不复制上游源码。** 上游通过 `upstream.lock` 锁定的 commit 在构建时拉取。
+- **不长期维护上游代码的分叉，也不复制上游源码。** 上游通过 `upstream.lock` 锁定的 commit 在构建时拉取。给上游提 PR 用的 fork 只承载 PR 分支。
 - 修改上游行为的优先顺序：
   1. 在 Adapter 或 bridge 中处理（代理层改写、覆盖 `electronAPI` 方法）
   2. 给上游提 issue/PR
@@ -23,9 +25,14 @@
    - issue 使用上游 `.github/ISSUE_TEMPLATE/` 中对应的模板。功能建议填「使用场景 / 当前问题 / 期望方案 / 已考虑的替代方案」；缺陷填「问题描述 / 环境 / 复现步骤 / 日志与截图」。
    - PR 标题格式是 `<type>(<scope>): <简短描述>`，正文完整填写 `.github/PULL_REQUEST_TEMPLATE.md` 的各节：改了什么、范围、UI 变化、怎么验证的（附实际命令和结果）、未执行的验证、风险与回滚、提交前检查。
    - 每个 commit 都带 DCO 签名（`git commit -s`），一个 PR 只解决一个问题，并遵守上游 `CONTRIBUTING.md` 与相关专题规则（如测试价值门槛）。
-4. issue/PR 合入后，删除 `patches/` 中对应的补丁，同步更新 `docs/plan.md` 和 `TODO.md` 的「上游事项」。
+4. 对审查意见的回复同样先写草稿（如 `docs/upstream/<主题>/review-reply.md`），经用户审阅后再发出。
+5. PR 分支放在被忽略的 `.upstream/cindy` 中（`origin` 指向上游，`fork` 指向贡献者的 fork），基于上游最新的 `main`。本地补丁 `patches/0001-…` 必须与 PR 代码一致：把各 PR 分支叠加到一个集成分支上再导出，并确认所有补丁能按顺序应用到 `upstream.lock` 中的 commit。
+6. 声称「行为不变」之类的结论要有可复现的证据（例如依赖去重用 `tools/release-resolution-check.mjs` 逐条比较解析结果），不能只靠抽样。
+7. issue/PR 合入后，删除 `patches/` 中对应的补丁，同步更新 `docs/plan.md` 和 `TODO.md` 的「上游事项」。
 
 ## 安全底线
+
+- **公开前先审计。** 推送到公开仓库之前，检查新增的文件**和完整历史**（包括 commit 信息）中有没有内网 IP、主机名、密码、token、本机路径。设计讨论记录这类私人材料放在被忽略的 `ref/`，本机信息放在 `.env.local` 和 `AGENTS.local.md`。拿不准的地方先问用户。
 
 - 用户凭据、Token、API Key、飞牛账号密码、VM 的 IP 等本机信息不得写入任何会被 git 跟踪的文件。本机配置放在 `.env.local`（已被忽略）。
 - Host 只监听 loopback；不得为图方便放宽 Adapter 的身份校验、CSP 或来源校验。
@@ -38,8 +45,11 @@
 
 - **在哪个环境验证由用户决定。** 需要新环境，或要改变验证方式时，先说明理由并征得同意。
 - 平台行为以飞牛 VM 中的实测为准，不以文档推测为准；实测结论写入 `docs/fnos-platform-notes.md`。
+- **已经测过、有记录的结论直接引用，不要重复测量。** 尤其不要为了复测而往 ext4 存储空间或用户文件区解压 Host 产物（会占用约 24GB，见平台笔记）。
 - 「代码存在」「单元测试通过」都不等于「功能可用」。只有在飞牛 VM 中通过真实入口走通的功能，才能在 README 中标为可用。
 - 遇到需要用户操作的步骤（图形安装界面、账号登录、提供密钥），立即停下来告诉用户要做什么，不要猜测或绕过。
+- 被权限检查拦下的操作（例如删除 VM、下载并执行未知二进制）不要绕过，说明原因后交给用户处理。
+- 磁盘空间有限：大量写入前先看剩余空间；在 VM 里删除大量文件后执行 `sudo fstrim -av`（见 [docs/development.md](docs/development.md)「磁盘空间」）。
 - 阶段验收的证据写入 `docs/evidence/`，包括哪些项没有验证。
 
 ### 操作飞牛设备

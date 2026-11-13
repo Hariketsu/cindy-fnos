@@ -22,3 +22,6 @@ __pycache__/
 
 # Private reference material (e.g. design discussions); never published
 ref/
+
+# Per-machine agent instructions (see AGENTS.local.example.md)
+AGENTS.local.md
