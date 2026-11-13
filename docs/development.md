@@ -70,6 +70,16 @@ FNOS_VM_PASSWORD=...
 在 Mac 上用飞牛官方的 [fnos-cli](https://github.com/fnnas-labs/fnos-cli-skill) 管理 VM（以后也用它管理真机）：安装 fpk、启停应用、查看日志与存储。
 授权方式是 OAuth：CLI 给出链接，用户在浏览器登录飞牛并同意，再把一次性 code 交回 CLI。不需要 SSH 密码或 sudo。
 
+skill 已经随仓库一起提供（`.agents/skills/fnos-cli/`），首次运行会下载固定版本的二进制并校验 SHA256：
+
+```bash
+F=.agents/skills/fnos-cli/scripts/fnos-cli
+$F --profile dev-vm --host 192.168.64.x --port 5666 --scheme http --allow-insecure-http \
+   login --authorize-only --agent-name '<你的 agent 名>'   # 在浏览器打开返回的链接并授权
+$F --profile dev-vm --host 192.168.64.x --port 5666 --scheme http --allow-insecure-http login --code '<code>'
+$F --profile dev-vm --allow-insecure-http storage pools  # 只读验证
+```
+
 不建议用 SSH 跑 `appcenter-cli`：它要 root 权限，普通管理员直接运行会报 `rpcbroker: permission denied`。
 另外，飞牛账号默认没有家目录，要做 SSH 公钥登录得先用 sudo 建 `/home/<user>/.ssh`（重启后公钥登录失效的原因还没查明）。
 

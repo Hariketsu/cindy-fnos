@@ -32,6 +32,15 @@
 - 遇到需要用户操作的步骤（图形安装界面、账号登录、提供密钥），立即停下来告诉用户要做什么，不要猜测或绕过。
 - 阶段验收的证据写入 `docs/evidence/`，包括哪些项没有验证。
 
+### 操作飞牛设备
+
+- 用仓库内的官方 skill `fnos-cli`（`.agents/skills/fnos-cli/`，版本记录在 `skills-lock.json`）管理飞牛：安装 fpk、启停应用、查日志、看存储。使用前先读它的 `SKILL.md`。
+- 开发 VM 使用 profile `dev-vm`；访问 VM 的明文 HTTP 需要加 `--allow-insecure-http`：
+  `.agents/skills/fnos-cli/scripts/fnos-cli --profile dev-vm --allow-insecure-http <命令>`
+- 授权由用户在浏览器中完成，Agent 只接收用户主动发来的一次性 code，不复述也不保存。真机使用单独的 profile，并且要经用户同意。
+- 写操作（安装、卸载、存储、网络）先用 `--dry-run` 预检；存储类写操作必须先征得用户同意。
+- 升级 skill 是显式操作：用 `npx skills` 更新，在同一个提交里更新 `skills-lock.json`，并说明原因。
+
 ## 文档维护
 
 改动导致下列内容过时时，在同一次提交中更新对应文档：

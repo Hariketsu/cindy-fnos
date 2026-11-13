@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "skills": {
+    "fnos-cli": {
+      "source": "fnnas-labs/fnos-cli-skill",
+      "sourceType": "github",
+      "skillPath": "skills/fnos-cli/SKILL.md",
+      "computedHash": "01a5519b805999671b02b22be243cf8109887ca377283f0c494255e951b77516"
+    }
+  }
+}
