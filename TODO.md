@@ -3,7 +3,7 @@
 > 本文回答：还有什么没完成？什么最重要？哪些决定暂缓？
 > 完成一项就更新状态；阶段划分与验收标准见 [docs/plan.md](docs/plan.md)。
 
-## 当前阶段：P0 · 环境与平台探针
+## 已完成：P0 · 环境与平台探针
 
 - [x] 在 UTM 中安装 ARM 飞牛 VM（镜像 1.2.0701），已加数据盘并创建存储空间
 - [x] 搭建过程整理成 `scripts/dev-vm/` 与 docs/development.md（`create-vm.sh` 尚未从零验证）
@@ -22,11 +22,18 @@
 - [x] 用新补丁重新跑 `build-host.sh`，确认 0001 + 0002 + 裁剪的完整构建可用（34,370 个文件，ext4 估算 2.94GB；模块加载与 `/health` 正常）
 - [x] 补丁：从文件注入凭据密钥（`patches/0003`，`CINDY_HOST_CREDENTIAL_KEY_FILE`；VM 中 Runtime 从「Unlock the system keyring」变为 `uninitialized`）
 - [x] 写 `docs/upstream/credential-key-file/issue.md` 草稿，待用户审阅
-- [ ] 验证中国大陆账号需要的 `CINDY_HOST_REGION=cn`
+- [x] 区域：默认 `CINDY_HOST_REGION=cn`（用户决定；P1 验收时实测登录）
+
+## 当前阶段：P1 · MVP 应用包
+
+- [ ] Adapter（`adapter/`）：网关 Unix Socket → Host；管理员校验、前缀剥离、Host/Origin 改写、bearer 注入、接口白名单、iframe 策略、错误页 ← 子代理 A
+- [ ] Web 子路径：shim 补丁（`patches/0004`）+ Renderer `--base` 构建 + 根路径排查 ← 子代理 B
+- [ ] fpk 打包：manifest、包用户、`cmd/main`（启动 Host + Adapter、生成密钥文件、`CINDY_HOST_REGION=cn`）、iframe 与新标签页入口
+- [ ] 网页首次登录（包装 `cindy-host login`）
+- [ ] P1 验收（需要用户：Cindy 账号、DeepSeek 临时 Key）
 
 ## 下一阶段
 
-- P1 MVP 应用包：Adapter、fpk、登录、真实任务、重启恢复、升级、卸载
 - P2 飞牛原生整合：fnos-bridge、右键交给 Cindy、卸载向导、可读错误
 - P3 x86 真机验收、CI 发布
 
