@@ -15,6 +15,16 @@
   每个补丁都要在文件头写明对应的上游 issue/PR 和删除条件。
 - 不修改上游 Renderer 的界面代码。确实需要调整布局时，用独立的 CSS 覆盖，并说明原因。
 
+## 向上游 Cindy 贡献
+
+1. **先 issue，后 PR。** 每个准备提交给上游的改动，都先写好 issue；PR 正文里关联这个 issue（「关联 Issue / 需求」一栏）。
+2. **先给用户过目。** issue 和 PR 的完整草稿先写进 `docs/upstream/`（如 `docs/upstream/<主题>/issue.md`、`pr.md`），由用户审阅确认后才能提交。提交 issue 和 PR 都属于对外操作，必须得到用户的明确同意。
+3. **遵循 Cindy 社区规范**（以锁定 commit 的上游仓库为准，改动前重新核对）：
+   - issue 使用上游 `.github/ISSUE_TEMPLATE/` 中对应的模板。功能建议填「使用场景 / 当前问题 / 期望方案 / 已考虑的替代方案」；缺陷填「问题描述 / 环境 / 复现步骤 / 日志与截图」。
+   - PR 标题格式是 `<type>(<scope>): <简短描述>`，正文完整填写 `.github/PULL_REQUEST_TEMPLATE.md` 的各节：改了什么、范围、UI 变化、怎么验证的（附实际命令和结果）、未执行的验证、风险与回滚、提交前检查。
+   - 每个 commit 都带 DCO 签名（`git commit -s`），一个 PR 只解决一个问题，并遵守上游 `CONTRIBUTING.md` 与相关专题规则（如测试价值门槛）。
+4. issue/PR 合入后，删除 `patches/` 中对应的补丁，同步更新 `docs/plan.md` 和 `TODO.md` 的「上游事项」。
+
 ## 安全底线
 
 - 用户凭据、Token、API Key、飞牛账号密码、VM 的 IP 等本机信息不得写入任何会被 git 跟踪的文件。本机配置放在 `.env.local`（已被忽略）。

@@ -13,7 +13,6 @@
 - [x] 平台探针 fpk（`tools/fnos-probe/`）：网关前缀、请求头、iframe sandbox/同源、SSE、JS SDK、打开方式入口
 - [x] 探针结论写入 `docs/fnos-platform-notes.md`
 - [ ] 查明后端 `trim.system.getPlatformConfig` 返回 403 的原因（不阻塞：前端接口可用）
-- [ ] 决定开发 VM 是否关闭系统自动更新（已从 1.2.0701 自动升级到 1.2.1010）
 - [ ] 在 OrbStack 中构建 linux-arm64 Host（只带 Pi），在 VM 中启动并检查 `/health`
 
 ## 下一阶段
@@ -33,7 +32,7 @@
 | Host 手机号登录 | 待实测 |
 | Host 本地模式（无账号） | 未提 |
 
-提交 issue/PR 的节奏还没定（逐项提交，还是 P0 结束后汇总成一份「服务器 / NAS 部署需求」）。
+流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/`，经用户审阅后提交。节奏还没定（逐项提交，还是 P0 结束后汇总）。
 
 ## 暂缓的决定
 
