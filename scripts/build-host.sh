@@ -4,6 +4,12 @@
 # Usage: scripts/build-host.sh [arm64|amd64]    (default: arm64)
 # Output: build/host/cindy-host-linux-<arch>.tar.gz
 #
+# CINDY_WEB_BASE   URL path the browser loads the app from, e.g. /app/cindy/
+#                  (fnOS gateway). Builds the renderer with Vite --base so its
+#                  assets resolve under that path; the proxy in front must also
+#                  set window.__CINDY_BASE__ for the shim (patches/0004).
+#                  Default: unset, renderer served at / as upstream.
+#
 # Why Debian 12: fnOS is Debian 12 (glibc 2.36). The release contains native
 # modules compiled on the build machine, so the glibc must match the target.
 # See docs/development.md for details.
@@ -17,6 +23,11 @@ REPO=$(sed -n 's/^repository=//p' "$ROOT/upstream.lock")
 NODE_VERSION=22.22.3          # upstream .nvmrc
 PNPM_VERSION=10.33.2          # upstream packageManager
 HARNESSES=pi-bin,ripgrep-bin  # see docs/plan.md: only Pi is bundled
+WEB_BASE=${CINDY_WEB_BASE:-}
+if [[ -n $WEB_BASE && ! $WEB_BASE =~ ^/([A-Za-z0-9._~-]+/)*$ ]]; then
+  echo "CINDY_WEB_BASE must be an absolute path ending in /, e.g. /app/cindy/" >&2
+  exit 1
+fi
 NODE_ARCH=$([[ $ARCH == amd64 ]] && echo x64 || echo arm64)
 OUT=$ROOT/build/host
 mkdir -p "$OUT"
@@ -60,7 +71,7 @@ git lfs pull --include='apps/desktop/native/sqlite-vec/linux-*'
 pnpm install --frozen-lockfile    # also downloads the agent harness binaries
 CLI=\$(cd apps/host && node -p \"require('path').join(require('path').dirname(require.resolve('playwright-core/package.json')),'cli.js')\")
 node \"\$CLI\" install chromium   # Chromium bundled into the release
-pnpm --filter desktop exec vite build --config vite.renderer.config.ts
+pnpm --filter desktop exec vite build --config vite.renderer.config.ts ${WEB_BASE:+--base=$WEB_BASE}
 
 rm -rf \$HOME/out && mkdir -p \$HOME/out
 CINDY_HOST_HARNESSES=$HARNESSES pnpm --filter @cindy/host build --output \$HOME/out/cindy-host
