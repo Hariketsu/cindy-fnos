@@ -17,10 +17,11 @@
 
 ## P0 遗留，进入 P1 前要定
 
-- [ ] **Host 的打包形态**：存储空间的 64KB 簇使 Host 产物（约 29.8 万个文件）占用 24GB。候选方案：减少文件数量（把依赖打包成少量文件，或裁剪依赖）／改装到系统分区（`install_type=root`）／把运行时放进单个镜像文件。需要评估后与用户讨论
+- [x] **Host 的打包形态**：决定 fpk 中直接放文件树，配合依赖去重和裁剪（约 3.4 万个文件、1GB）；开发装在 btrfs 存储空间上
 - [x] 产物瘦身：`scripts/prune-host.mjs` 裁剪 + `patches/0002` 依赖去重，文件数从 29.8 万降到约 3.4 万，ext4 估算约 3GB
-- [ ] 用新补丁重新跑 `build-host.sh`，确认 0001 + 0002 + 裁剪的完整构建可用
-- [ ] 补丁：从文件注入凭据密钥（Runtime 目前卡在「Unlock the system keyring」）
+- [x] 用新补丁重新跑 `build-host.sh`，确认 0001 + 0002 + 裁剪的完整构建可用（34,370 个文件，ext4 估算 2.94GB；模块加载与 `/health` 正常）
+- [x] 补丁：从文件注入凭据密钥（`patches/0003`，`CINDY_HOST_CREDENTIAL_KEY_FILE`；VM 中 Runtime 从「Unlock the system keyring」变为 `uninitialized`）
+- [x] 写 `docs/upstream/credential-key-file/issue.md` 草稿，待用户审阅
 - [ ] 验证中国大陆账号需要的 `CINDY_HOST_REGION=cn`
 
 ## 下一阶段
@@ -36,7 +37,7 @@
 | 构建时可选 harness | 本地补丁 `patches/0001`；issue 已提交 [#10404](https://github.com/makecindy/cindy/issues/10404) |
 | 依赖复制去重 | 本地补丁 `patches/0002`；issue 已提交 [#10406](https://github.com/makecindy/cindy/issues/10406) |
 | 子路径部署（base path） | 未提 |
-| 从文件注入凭据密钥 | 未提 |
+| 从文件注入凭据密钥 | 本地补丁 `patches/0003`；issue 草稿待用户审阅 |
 | Web 首次登录 API | 未提 |
 | Host 手机号登录 | 待实测 |
 | Host 本地模式（无账号） | 未提 |

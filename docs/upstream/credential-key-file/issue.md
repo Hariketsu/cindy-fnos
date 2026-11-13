@@ -3,7 +3,7 @@
 > 状态：**草稿，待用户审阅**，未提交。
 > 模板：上游 `.github/ISSUE_TEMPLATE/feature_request.yml`（功能建议）
 > 上游基线：`makecindy/cindy@cc2dc0f`
-> 本地补丁：`patches/0003-host-credential-key-file.patch`（实现与 VM 验证进行中，结果补齐后再请用户审阅）
+> 本地补丁：`patches/0003-host-credential-key-file.patch`（已实现；上游 Host 测试 284/284 通过；已在飞牛 VM 上验证）
 
 ---
 
@@ -49,7 +49,16 @@ Linux 上的 Host 通过 `secret-tool` 向 Secret Service 取得 OSCrypt 密钥�
 
 **安全取舍**：文件中的密钥只受文件权限保护，拿到 root 或物理磁盘的人可以解密凭据。这和 systemd、Docker 场景下机密文件的安全级别相同，强于没有加密，但弱于需要用户解锁的密钥环。所以它只作为显式开启的选项，默认行为不变。
 
-如果方向可以接受，我可以提交 PR，包含对 `store.test.mjs` 的补充测试。
+我已经在 fnOS 的构建中实现并验证了这个方案（[patches/0003-host-credential-key-file.patch](https://github.com/Hariketsu/cindy-fnos/blob/main/patches/0003-host-credential-key-file.patch)，改动只在 `store.mjs`，约 25 行）。在 ARM 飞牛上：
+
+| 情况 | Runtime |
+|---|---|
+| 不设置变量 | `error`：「Unlock the system keyring…」（与现在相同） |
+| 密钥文件权限 0600 | `uninitialized`：「no account database in this profile」，可以继续登录 |
+| 密钥文件权限 0644 | `error`：「Cannot use CINDY_HOST_CREDENTIAL_KEY_FILE …: accessible by group or others; chmod 600 it」 |
+| 文件不存在 | `error`：给出具体的 ENOENT 信息 |
+
+`store.test.mjs` 补充了用例：密钥环推导出的密钥写入的记录，能通过保存同一密钥的文件读出；权限过宽、文件不存在、内容为空都会被拒绝。新用例在改动前失败、改动后通过，`pnpm --filter @cindy/host test` 284/284 通过。如果方向可以接受，我可以提交 PR。
 
 ### 已考虑的替代方案 / Alternatives considered
 
