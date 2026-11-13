@@ -72,6 +72,8 @@ FNOS_VM_PASSWORD=...
 
 最初还有一个 ext4 存储空间（64KB 簇）。它让 Host 产物膨胀到 24GB，严重拖慢迭代，已于 2026-11-13 删除。ext4 上的占用改用估算：`文件数 × 64KB 向上取整`。按这个方法估算原始产物约 20GB，和实测的 24GB 基本吻合，差额是目录本身占用的簇。
 
+SSH 到 VM：`scripts/dev-vm/vm-ssh.sh '<命令>'`，传文件：`scripts/dev-vm/vm-ssh.sh --scp <本地文件> <远端路径>`（读取 `.env.local` 中的密码）。
+
 ### 管理设备：官方 fnos-cli
 
 在 Mac 上用飞牛官方的 [fnos-cli](https://github.com/fnnas-labs/fnos-cli-skill) 管理 VM（以后也用它管理真机）：安装 fpk、启停应用、查看日志与存储。

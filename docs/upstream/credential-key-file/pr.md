@@ -1,6 +1,6 @@
 # PR 草稿：无 Secret Service 的 Linux 环境下，Host 可从文件读取凭据密钥
 
-> 状态：**草稿，待用户审阅**，未提交。验证数据均为实测（2026-11-13，linux-arm64，Debian 12）。
+> 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/pull/10429验证数据均为实测（2026-11-13，linux-arm64，Debian 12）。
 > 关联 issue：makecindy/cindy#10417（分诊机器人已表示方向接受，并给出实现与验收要求，本 PR 均已按要求处理）
 > 分支：本地 `.upstream/cindy` 中的 `feat/host-credential-key-file`，基于上游 `main`（`65fb14e`），1 个 commit，带 DCO 签名
 > 模板：上游 `.github/PULL_REQUEST_TEMPLATE.md`

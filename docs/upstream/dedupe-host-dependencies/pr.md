@@ -1,7 +1,7 @@
 # PR 草稿：Host 构建复制依赖时，复用 Node 已能解析到的副本
 
 > 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/pull/10419
-> 更新：根据 Greptile 审查（P1）改为「完整复制后再去重」，追加 commit `c7f5210`；下面的正文是更新后的版本，**待用户审阅后**用 `gh pr edit` 替换 PR 描述。验证数据均为实测（2026-11-13，linux-arm64，Debian 12，基于 `f58aada`）。
+> 更新：根据 Greptile 审查（P1）改为「完整复制后再去重」，追加 commit `c7f5210`；下面的正文是更新后的版本，已于 2026-11-14 经用户审阅后替换 PR 描述。验证数据均为实测（2026-11-13，linux-arm64，Debian 12，基于 `f58aada`）。
 > 关联 issue：makecindy/cindy#10406（分诊机器人已表示方向接受，并给出实现与验收要求，本 PR 均已按要求处理）
 > 分支：本地 `.upstream/cindy` 中的 `perf/host-dedupe-dependency-copies`，基于上游 `main`（`f58aada`），1 个 commit，带 DCO 签名
 > 模板：上游 `.github/PULL_REQUEST_TEMPLATE.md`

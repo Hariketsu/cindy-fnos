@@ -1,6 +1,7 @@
 # 回复草稿：PR #10419 中 Greptile 的 P1 审查意见
 
-> 状态：**草稿，待用户审阅**。回复位置：Greptile 在 `apps/host/scripts/build.mjs:70` 的行内评论（回复该评论串）。
+> 状态：**已发出**（经用户审阅）：https://github.com/makecindy/cindy/pull/10419#discussion_r4565618857
+> 回复位置：Greptile 在 `apps/host/scripts/build.mjs:70` 的行内评论（回复该评论串）。
 > 同时推送修正 commit `c7f5210`，并用更新后的正文替换 PR 描述（见 `pr.md`）。
 
 ---

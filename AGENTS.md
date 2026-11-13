@@ -63,6 +63,11 @@
 | `TODO.md` | 项目参与者 | 每完成一项、发现新问题或暂缓一个决定时 |
 | `AGENTS.md` | Agent | 工作规则变化时 |
 
+## 交接
+
+- 会话结束前，或上下文快用完时，写 `handoff/handoff-<YYYY-MM-DD>-<主题>.md`：当前状态、环境、下一步（附命令）、已知的坑、用户偏好。长期结论放在 `docs/`，交接文档只写「接手要点」。
+- 新会话先读最新的交接文档，再读 TODO.md。
+
 ## Git
 
 - 提交信息使用 Conventional Commits（`feat:`、`fix:`、`docs:`、`build:`、`test:`、`chore:`），正文写明原因。
