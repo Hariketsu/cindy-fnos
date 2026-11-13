@@ -10,8 +10,13 @@
 
 ### 使用场景 / Use case
 
-我们在把 Cindy Host 打包成飞牛 NAS（fnOS）的原生应用，界面复用官方 Renderer，后台运行 `apps/host/scripts/build.mjs` 产出的独立 Host。项目和开发进度公开在 [Hariketsu/cindy-fnos](https://github.com/Hariketsu/cindy-fnos)，架构见 [docs/architecture.md](https://github.com/Hariketsu/cindy-fnos/blob/main/docs/architecture.md)。
-这个发行版只提供 Pi 一个 Agent，不内置 Claude Code 和 Codex。这是产品取舍：NAS 用户主要通过 API Key 使用模型，而且安装包体积对 NAS 应用影响很大。
+我正在把 Cindy 打包成飞牛 NAS（fnOS）的原生应用。
+
+技术路线为：界面复用官方 Renderer，后台运行 `apps/host/scripts/build.mjs` 产出的独立 Host。
+
+项目和开发进度公开在 [Hariketsu/cindy-fnos](https://github.com/Hariketsu/cindy-fnos)
+
+鉴于飞牛 NAS 用户常见的网络环境，不太适合直接内置 Claude Code 和 Codex，目前做出的取舍为只提供 Pi Agent
 
 ### 当前问题 / Current limitation
 
@@ -34,7 +39,9 @@ Host 运行时本身已经能正确处理缺少的 harness：只打包 Pi 和 ri
 - 出现未知名称时直接报错，避免拼写错误导致漏打包；
 - 把实际打包的列表写进 `release.json` 的 `harnesses` 字段，便于发行版和排障时核对。
 
-改动集中在 `apps/host/scripts/build.mjs`，约 10 行。我们已经在 fnOS 的构建中使用这个改动（[patches/0001-host-build-selectable-harnesses.patch](https://github.com/Hariketsu/cindy-fnos/blob/main/patches/0001-host-build-selectable-harnesses.patch)），并在 ARM 飞牛上验证过 Host 启动和 harness 状态（[实测记录](https://github.com/Hariketsu/cindy-fnos/blob/main/docs/fnos-platform-notes.md#cindy-host-实测p0)）。如果方向可以接受，我们可以提交 PR。
+改动集中在 `apps/host/scripts/build.mjs`，约 10 行。
+
+目前我已经尝试在 fnOS 的构建中使用这个改动（[patches/0001-host-build-selectable-harnesses.patch](https://github.com/Hariketsu/cindy-fnos/blob/main/patches/0001-host-build-selectable-harnesses.patch)），并在 ARM 飞牛上验证过 Host 启动和 harness 状态（[实测记录](https://github.com/Hariketsu/cindy-fnos/blob/main/docs/fnos-platform-notes.md#cindy-host-实测p0)）。如果方向可以接受，我可以提交 PR。
 
 ### 已考虑的替代方案 / Alternatives considered
 
