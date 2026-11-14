@@ -5,6 +5,7 @@
 > 背景：飞牛版 P1 的网页首次登录包装了 `cindy-host login --method=wechat --no-open`；维护者用微信授权后，Host 报 `authorization exchange returned no refresh token`。
 > 未确认的事实：服务器这次返回的具体是哪一种结果（CLI 的报错没有带上），下文按代码推断，已如实写明。
 > 对照（2026-11-15）：同一 VM 改用国际版 + Apple 登录成功。
+> 截图：同目录 `wechat-no-refresh-token.png`（提交时上传到 issue）。2026-11-15 在全新安装的中国大陆版上由维护者用微信授权后拍摄；页面是飞牛版自己包装 CLI 的登录页，「详细信息」一行是 `cindy-host login` 的原始报错。
 
 **标题**：`bug: cindy-host login 的授权码兑换结果不是 ok 时（需绑定手机号、选择账号）只报 no refresh token`
 
@@ -59,3 +60,7 @@ If it does not open, visit:
 https://auth.cindy.com.cn/api/auth/social/wechat/authorize?client_type=desktop&device_id=…&redirect_uri=https%3A%2F%2Fauth.cindy.com.cn%2Fapi%2Fauth%2Fdesktop%2Fcallback&code_challenge=…&code_challenge_method=S256&client_state=…
 cindy-host login failed: authorization exchange returned no refresh token
 ```
+
+下图是我们在 NAS 上包装 `cindy-host login` 的登录页（上面的中文提示是我们自己的文案），「详细信息」一行即 CLI 的原始报错：
+
+![微信授权后 cindy-host login 报 no refresh token](wechat-no-refresh-token.png)
