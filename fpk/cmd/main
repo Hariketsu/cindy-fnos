@@ -18,6 +18,12 @@ SOCKET="${APP}/app.sock"
 LOGIN_PID="${RUN_DIR}/login.pid"         # set while `main host-login` runs
 SELF="$(readlink -f "$0")"               # the adapter runs `main host-login` through this path
 
+# Cindy edition chosen at install (cmd/install_callback); mainland China by default.
+REGION="$(head -n1 "${TRIM_PKGETC}/region" 2>/dev/null | tr -d '[:space:]')"
+case "${REGION}" in cn|global) ;; *) REGION=cn ;; esac
+# Browser sign-in methods `cindy-host login` supports for that edition.
+if [ "${REGION}" = global ]; then LOGIN_METHODS="google apple"; else LOGIN_METHODS="wechat"; fi
+
 log() { echo "$(date '+%F %T') $*" >> "${LOG_DIR}/lifecycle.log"; }
 fail() { echo "$1" > "${TRIM_TEMP_LOGFILE}"; log "ERROR: $1"; exit 1; }
 alive() { [ -s "$1" ] && kill -0 "$(head -n1 "$1" | tr -d '[:space:]')" 2>/dev/null; }
@@ -36,7 +42,7 @@ host_env() {
   export HOME="${TRIM_PKGHOME}"
   export CINDY_HOST_DATA_DIR="${DATA_DIR}"
   export CINDY_HOST_PORT=0                      # random loopback port, published in host-endpoint.json
-  export CINDY_HOST_REGION=cn                   # most fnOS users are in mainland China
+  export CINDY_HOST_REGION="${REGION}"
   export CINDY_HOST_CREDENTIAL_KEY_FILE="${KEY_FILE}"
 }
 
@@ -58,7 +64,8 @@ start_app() {
   if ! alive "${RUN_DIR}/adapter.pid"; then
     log "starting adapter"
     CINDY_FNOS_SOCKET="${SOCKET}" CINDY_FNOS_PREFIX=/app/cindy CINDY_FNOS_HOST_DATA_DIR="${DATA_DIR}" \
-      CINDY_FNOS_MAIN="${SELF}" "${NODE}" "${APP}/adapter/server.mjs" >> "${LOG_DIR}/adapter.log" 2>&1 &
+      CINDY_FNOS_MAIN="${SELF}" CINDY_FNOS_LOGIN_METHODS="${LOGIN_METHODS}" \
+      "${NODE}" "${APP}/adapter/server.mjs" >> "${LOG_DIR}/adapter.log" 2>&1 &
     echo $! > "${RUN_DIR}/adapter.pid"
   fi
 
@@ -102,6 +109,8 @@ stop_app() {
 # to run while the Host is up, so stop it, sign in, then start it again whatever
 # the outcome. stdout carries the authorize URL to the adapter.
 login_host() {
+  local method="$1"
+  case " ${LOGIN_METHODS} " in *" ${method} "*) ;; *) echo "unsupported sign-in method: ${method}" >&2; exit 2 ;; esac
   alive "${LOGIN_PID}" && { echo "a sign-in is already running" >&2; exit 1; }
   echo $$ > "${LOGIN_PID}"
   local child="" status=1
@@ -115,7 +124,7 @@ login_host() {
   log "login: stopping host"
   stop_host
   log "login: waiting for authorization"
-  ( host_env; exec "${HOST_DIR}/cindy-host" login --method=wechat --no-open ) &
+  ( host_env; exec "${HOST_DIR}/cindy-host" login --method="${method}" --no-open ) &
   child=$!
   wait "${child}"; status=$?
   child=""
@@ -131,6 +140,6 @@ case "$1" in
     if alive "${RUN_DIR}/adapter.pid" && { alive "${RUN_DIR}/host.pid" || alive "${LOGIN_PID}"; }; then exit 0; fi
     exit 3
     ;;
-  host-login) login_host ;;
+  host-login) login_host "$2" ;;
   *) exit 1 ;;
 esac

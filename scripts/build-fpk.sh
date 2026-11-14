@@ -28,6 +28,16 @@ tar -xzf "$TARBALL" -C "$STAGE/app/host" --strip-components=1
 rsync -a --exclude test --exclude '*.test.mjs' "$ROOT/adapter/" "$STAGE/app/adapter/"
 chmod +x "$STAGE/cmd/"* "$STAGE/app/host/cindy-host" "$STAGE/app/host/bin/node"
 
+# The adapter's sign-in page reuses the original login artwork. The renderer's file
+# names carry build hashes, and the Host is stopped during sign-in, so copy them
+# under stable names for the adapter to serve itself (adapter/lib/brand.mjs).
+mkdir -p "$STAGE/app/adapter/brand"
+for name in hero@2x wordmark@2x wordmark-dark@2x slogan@2x slogan-dark@2x; do
+  src=$(ls "$STAGE/app/host/resources/web/assets/$name"-*.png 2>/dev/null | head -n1)
+  [[ -n $src ]] || { echo "Missing renderer asset $name in the Host release." >&2; exit 1; }
+  cp "$src" "$STAGE/app/adapter/brand/$name.png"
+done
+
 ( cd "$OUT" && "$ROOT/scripts/fnpack" build --directory "$STAGE" )
 mv "$STAGE"/*.fpk "$OUT/cindy-$VERSION-$ARCH.fpk" 2>/dev/null || mv "$OUT"/cindy.fpk "$OUT/cindy-$VERSION-$ARCH.fpk"
 rm -rf "$STAGE"

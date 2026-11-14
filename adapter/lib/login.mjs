@@ -33,15 +33,16 @@ export function createLogin({ command, spawn = nodeSpawn, onExit = () => {}, war
   return {
     available: Boolean(command),
     status: () => ({ ...state }),
-    start() {
+    /** `method` must already be one the caller allows (cmd/main checks it again). */
+    start(method) {
       if (!command || child) return { ...state };
-      state = { state: 'starting' };
+      state = { state: 'starting', method };
       cancelled = false;
       let reason = '';
-      child = spawn(command, ['host-login'], { stdio: ['ignore', 'pipe', 'pipe'] });
+      child = spawn(command, ['host-login', method], { stdio: ['ignore', 'pipe', 'pipe'] });
       lines(child.stdout, line => {
         const url = authorizeUrl(line);
-        if (url && state.state === 'starting') state = { state: 'waiting', url };
+        if (url && state.state === 'starting') state = { state: 'waiting', method, url };
       });
       lines(child.stderr, line => {
         const text = line.trim();

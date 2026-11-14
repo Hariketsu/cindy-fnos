@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import { matchRoute } from './routes.mjs';
+import { readBrandImage } from './brand.mjs';
 import { createLogin } from './login.mjs';
 import { FORBIDDEN_PAGE, UNAVAILABLE_PAGE, loginPage } from './pages.mjs';
 import { createUpstream } from './upstream.mjs';
@@ -119,6 +120,7 @@ export function createAdapter(config) {
   const upstream = createUpstream({ dataDir: config.dataDir, port: config.hostPort, warn });
   // The Host restarts on a new port after a sign-in, so drop the cached endpoint.
   const login = createLogin({ command: config.loginCommand, spawn: config.spawn, warn, onExit: () => upstream.invalidate() });
+  const loginMethods = config.loginMethods?.length ? config.loginMethods : ['wechat'];
   const loginPath = `${prefix}/_fnos/login`;
 
   /** The Host's /health, or null when it cannot be read right now. */
@@ -147,18 +149,23 @@ export function createAdapter(config) {
     return (await hostHealth())?.account?.authenticated === false;
   }
 
-  async function handleLogin(req, res, pathname) {
+  async function handleLogin(req, res, pathname, search) {
     const action = pathname.slice('/_fnos/login'.length);
     const read = req.method === 'GET' || req.method === 'HEAD';
     if (!login.available) { sendJson(res, 404, { error: 'not_found' }); return; }
-    if (action === '' && read) { sendHtml(res, 200, loginPage(prefix)); return; }
+    if (action === '' && read) { sendHtml(res, 200, loginPage(prefix, loginMethods)); return; }
     if (action === '/status' && read) {
       const status = login.status();
       if (status.state === 'succeeded') status.ready = (await hostHealth())?.account?.authenticated === true;
       sendJson(res, 200, status);
       return;
     }
-    if (action === '/start' && req.method === 'POST') { sendJson(res, 202, login.start()); return; }
+    if (action === '/start' && req.method === 'POST') {
+      const method = search.get('method');
+      if (!loginMethods.includes(method)) { sendJson(res, 400, { error: 'unsupported_method' }); return; }
+      sendJson(res, 202, login.start(method));
+      return;
+    }
     if (action === '/cancel' && req.method === 'POST') { sendJson(res, 202, login.cancel()); return; }
     sendJson(res, 404, { error: 'not_found' });
   }
@@ -305,7 +312,13 @@ export function createAdapter(config) {
       return;
     }
     if (!originAllowed(req)) { sendJson(res, 403, { error: 'origin_not_allowed' }); return; }
-    if (pathname === '/_fnos/login' || pathname.startsWith('/_fnos/login/')) { await handleLogin(req, res, pathname); return; }
+    if (pathname.startsWith('/_fnos/brand/') && (req.method === 'GET' || req.method === 'HEAD')) {
+      const image = await readBrandImage(config.brandDir, pathname.slice('/_fnos/brand/'.length).replace(/\.png$/, ''));
+      if (image) sendBody(res, 200, 'image/png', image, { 'cache-control': 'public, max-age=86400' });
+      else sendJson(res, 404, { error: 'not_found' });
+      return;
+    }
+    if (pathname === '/_fnos/login' || pathname.startsWith('/_fnos/login/')) { await handleLogin(req, res, pathname, url.searchParams); return; }
     // The web client goes to /connect after signing out; on fnOS that is the sign-in page.
     if (login.available && pathname === '/connect' && (req.method === 'GET' || req.method === 'HEAD')) { redirect(res, loginPath); return; }
     const route = matchRoute(req.method, pathname);

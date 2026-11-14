@@ -1,5 +1,16 @@
 #!/bin/bash
 
 ### This script is called after the user installs the application.
+# Keep the Cindy edition chosen in wizard/install (wizard_region) in TRIM_PKGETC,
+# where cmd/main reads it on every start. An existing choice is kept: the
+# Host's account and data belong to the edition they were created with.
 
+REGION_FILE="${TRIM_PKGETC}/region"
+case "${wizard_region}" in
+  cn|global) ;;
+  *) wizard_region=cn ;;
+esac
+if [ ! -s "${REGION_FILE}" ]; then
+  echo "${wizard_region}" > "${REGION_FILE}" || { echo "无法保存 Cindy 版本设置。" > "${TRIM_TEMP_LOGFILE}"; exit 1; }
+fi
 exit 0

@@ -1,0 +1,22 @@
+[
+  {
+    "stepTitle": "选择 Cindy 版本",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "Cindy 账号分为中国大陆版和国际版，两者的账号互不相通。请选择你的 Cindy 账号所属的版本；安装后不能更改。"
+      },
+      {
+        "type": "radio",
+        "field": "wizard_region",
+        "label": "Cindy 版本",
+        "initValue": "cn",
+        "options": [
+          { "label": "中国大陆版（微信登录）", "value": "cn" },
+          { "label": "国际版（Google、Apple 登录）", "value": "global" }
+        ],
+        "rules": [{ "required": true, "message": "请选择 Cindy 版本" }]
+      }
+    ]
+  }
+]
