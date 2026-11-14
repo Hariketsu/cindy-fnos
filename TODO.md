@@ -40,16 +40,16 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 
 | 事项 | 本地补丁 | Issue | PR | 状态 |
 |---|---|---|---|---|
-| 构建时可选 harness | `0001` | [#10404](https://github.com/makecindy/cindy/issues/10404) | [#10418](https://github.com/makecindy/cindy/pull/10418) | **已合入**（2026-11-13，`a54e488`）；待 `upstream.lock` 前移后删除补丁 |
+| 构建时可选 harness | 已删除 | [#10404](https://github.com/makecindy/cindy/issues/10404) | [#10418](https://github.com/makecindy/cindy/pull/10418) | **已合入**（2026-11-13，`a54e488`）；`upstream.lock` 已移到 `b975dc3`，补丁已删除 |
 | 依赖复制去重 | `0002` | [#10406](https://github.com/makecindy/cindy/issues/10406) | [#10419](https://github.com/makecindy/cindy/pull/10419) | #10418 合入后冲突，已变基到 `b975dc3` 并重新验证、回复（2026-11-15），等待复审 |
 | 从文件读取凭据密钥 | `0003` | [#10417](https://github.com/makecindy/cindy/issues/10417) | [#10429](https://github.com/makecindy/cindy/pull/10429) | 触发维护者确认门（[#10437](https://github.com/makecindy/cindy/issues/10437)）；已按分析补 Windows 跳过（`813f482`）并回复，等待维护者 Approve |
-| Host 发行包缺 semver／picomatch | — | [#10587](https://github.com/makecindy/cindy/issues/10587) | 草稿 `docs/upstream/host-release-semver/pr.md` | 上游 main 的 Host 发行包启动即崩；`upstream.lock` 前移到含 4ee0876 的提交时需要此修复（或临时补丁） |
+| Host 发行包缺 semver／picomatch | `0005` | [#10587](https://github.com/makecindy/cindy/issues/10587) | [#10589](https://github.com/makecindy/cindy/pull/10589) | 刚提交（2026-11-15）；上游 main 的 Host 发行包启动即崩，`0005` 临时补上 |
 | Web 子路径部署 | `0004` | 未提 | — | 补丁通用，可作为下一个 issue |
 | Web 首次登录 API | — | 未提 | — | 先在 Adapter 里包装 CLI |
 | Host 手机号登录 | — | — | — | 待实测 |
 | Host 本地模式（无账号） | — | 未提 | — | 暂缓 |
 
-流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<主题>/`，经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的 `fnos-integration` 分支叠加三个 PR 后导出，必须与 PR 代码一致。
+流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<主题>/`，经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的 `fnos-integration` 分支依次叠加 #10419、#10429、#10589 后导出（`0004` 只在本仓库维护），必须与 PR 代码一致。
 
 ## 暂缓的决定
 

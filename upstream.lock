@@ -1,4 +1,4 @@
 # Cindy upstream commit this repository builds against.
 # Bump deliberately: rebuild, rerun the probe/acceptance checks, then commit.
 repository=https://github.com/makecindy/cindy.git
-commit=cc2dc0f739dbe7f5320eff43082d9bb659c708a3
+commit=b975dc39bce6bb7c1492d18977082c9d8b281044

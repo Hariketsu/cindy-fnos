@@ -21,7 +21,7 @@ MACHINE=${CINDY_BUILD_MACHINE:-cindy-build-$ARCH}
 COMMIT=$(sed -n 's/^commit=//p' "$ROOT/upstream.lock")
 REPO=$(sed -n 's/^repository=//p' "$ROOT/upstream.lock")
 NODE_VERSION=22.22.3          # upstream .nvmrc
-PNPM_VERSION=10.33.2          # upstream packageManager
+PNPM_VERSION=11.28.9          # upstream packageManager
 HARNESSES=pi-bin,ripgrep-bin  # see docs/plan.md: only Pi is bundled
 WEB_BASE=${CINDY_WEB_BASE:-}
 if [[ -n $WEB_BASE && ! $WEB_BASE =~ ^/([A-Za-z0-9._~-]+/)*$ ]]; then
@@ -68,7 +68,7 @@ git clean -qfd apps/host/scripts
 for p in '$ROOT'/patches/*.patch; do [[ -e \$p ]] && git apply --index \"\$p\"; done
 git lfs pull --include='apps/desktop/native/sqlite-vec/linux-*'
 
-pnpm install --frozen-lockfile    # also downloads the agent harness binaries
+pnpm install --frozen-lockfile --config.confirmModulesPurge=false    # also downloads the agent harness binaries; no TTY to confirm a modules purge
 CLI=\$(cd apps/host && node -p \"require('path').join(require('path').dirname(require.resolve('playwright-core/package.json')),'cli.js')\")
 node \"\$CLI\" install chromium   # Chromium bundled into the release
 pnpm --filter desktop exec vite build --config vite.renderer.config.ts ${WEB_BASE:+--base=$WEB_BASE}
