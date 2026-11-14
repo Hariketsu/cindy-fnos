@@ -44,6 +44,7 @@ if (!pair?.refreshToken) throw new Error('authorization exchange returned no ref
 - Cindy 版本或 commit：`main` `b975dc3`（独立 Host 发行包）
 - 平台与版本：linux-arm64，飞牛 fnOS 1.2.1010（Debian 12），无 Secret Service；`CINDY_HOST_REGION=cn`
 - 安装方式：源码构建独立 Host（`pnpm --filter @cindy/host build`），以服务方式运行；登录前已停止 Host
+- 本地补丁：构建另带 Web 子路径、凭据密钥文件、依赖去重、启动检查等补丁，均未改动 `apps/host/src/auth/login.mjs`、`login-cli.mjs` 和 `main.ts`；凭据密钥文件补丁只在兑换成功后写入会话时才会用到，本次在兑换结果检查处就已失败。同一构建用国际版 + Apple 登录成功
 
 ### 复现步骤 / Steps to reproduce
 
