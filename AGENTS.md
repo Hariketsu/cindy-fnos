@@ -36,6 +36,7 @@
 - **公开前先审计。** 推送到公开仓库之前，检查新增的文件**和完整历史**（包括 commit 信息）中有没有内网 IP、主机名、密码、token、本机路径。设计讨论记录这类私人材料放在被忽略的 `ref/`，本机信息放在 `.env.local` 和 `AGENTS.local.md`。拿不准的地方先问用户。
 
 - 用户凭据、Token、API Key、飞牛账号密码、VM 的 IP 等本机信息不得写入任何会被 git 跟踪的文件。本机配置放在 `.env.local`（已被忽略）。
+- `.env.example` 是 `.env.local` 的模板，会入库：只写字段名、说明和占位值，不写真实值。新增本机配置字段时，先改 `.env.example`，再请用户把真实值填进 `.env.local`。
 - Host 只监听 loopback；不得为图方便放宽 Adapter 的身份校验、CSP 或来源校验。
 - Agent 以包用户运行，不使用 root，不加入额外的用户组。
 - 未经用户明确同意，不执行：推送、发布 Release、提交上游 issue/PR、在用户的真实 NAS 上安装或修改任何东西、删除 VM 或快照。
