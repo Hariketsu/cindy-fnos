@@ -4,6 +4,7 @@
 > 模板：`.github/ISSUE_TEMPLATE/bug_report.yml`（缺陷报告）。
 > 背景：飞牛版 P1 的网页首次登录包装了 `cindy-host login --method=wechat --no-open`；维护者用微信授权后，Host 报 `authorization exchange returned no refresh token`。
 > 未确认的事实：服务器这次返回的具体是哪一种结果（CLI 的报错没有带上），下文按代码推断，已如实写明。
+> 对照（2026-11-15）：同一 VM 改用国际版 + Apple 登录成功。
 
 **标题**：`bug: cindy-host login 的授权码兑换结果不是 ok 时（需绑定手机号、选择账号）只报 no refresh token`
 
@@ -26,6 +27,8 @@ if (!pair?.refreshToken) throw new Error('authorization exchange returned no ref
 
 而 `exchangeAuthorizationCode` 返回的是 `loginOutcomeSchema`（`packages/auth-client/src/types.ts`），共有四种 `status`：`ok`、`select_account`、`binding_required`、`sso_verification_required`。只有 `ok` 带 `refreshToken`，其余三种都会落到上面这条报错。Desktop 的 `acceptLoginOutcome`（`apps/desktop/src/main/authManager.ts`）会继续引导用户选择账号、绑定手机号或完成验证，Host 没有对应处理。
 
+作为对照，同一套环境把区域换成国际版（`CINDY_HOST_REGION=global`），用 `cindy-host login --method=apple --no-open` 登录成功，Host 重启后 `account.authenticated=true`、`runtime.state=ready`。说明托管回调与授权码兑换本身可用；结合上面的代码，微信这次的失败应是兑换结果不是 `ok`。
+
 中国大陆版的账号以手机号为准（`GET https://auth.cindy.com.cn/api/auth/providers` 返回 `"attribution":"phone"`，`social: ["wechat","apple"]`），所以第一次用微信登录、尚未绑定手机号的用户，很可能会遇到 `binding_required`。CLI 的报错没有带上 `status`，这次具体是哪一种无法确认。
 
 期望：
@@ -43,7 +46,7 @@ if (!pair?.refreshToken) throw new Error('authorization exchange returned no ref
 
 ### 复现步骤 / Steps to reproduce
 
-1. 准备一个尚未在 Cindy 中国大陆版绑定手机号的微信账号【待维护者确认：这个微信之前是否登录过 Cindy、是否绑定过手机号】
+1. 准备一个尚未在 Cindy 中国大陆版绑定手机号的微信账号（这个微信之前未登录过 Cindy、未绑定过手机号）
 2. 停止 Host，执行 `CINDY_HOST_REGION=cn cindy-host login --method=wechat --no-open`
 3. 在浏览器打开输出的授权链接，用微信完成授权
 4. 命令以 `authorization exchange returned no refresh token` 失败

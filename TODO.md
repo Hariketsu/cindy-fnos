@@ -15,7 +15,7 @@
 进行中 / 下一步（按顺序）：
 
 1. [x] **集成构建并装进 VM**（2026-11-15）：fpk 装进 volume 2，飞牛桌面两个入口都打开原版界面（未登录状态），请求全部留在前缀内，见 [证据](docs/evidence/2026-11-15-p1-integration-install.md)
-2. [ ] **网页首次登录**（微信）：已实现并在 VM 上走通「未登录 → 登录页 → 暂停 Host → 微信授权页 → 取消 → Host 恢复」。Adapter 的 `/_fnos/login` 运行 `cmd/main host-login`（停 Host → `cindy-host login --method=wechat --no-open` → 重启 Host），`/connect` 也转到登录页。**待用户用微信扫码完成一次真实登录**，确认成功后自动进入 Cindy
+2. [x] **网页首次登录**（2026-11-15）：安装向导选择版本（中国大陆版：微信；国际版：Google、Apple），Adapter 登录页（原版风格）包装 CLI；国际版 Apple 登录成功进入主界面，见证据。中国大陆版微信登录受上游限制失败（见「上游事项」）。原始记录：已实现并在 VM 上走通「未登录 → 登录页 → 暂停 Host → 微信授权页 → 取消 → Host 恢复」。Adapter 的 `/_fnos/login` 运行 `cmd/main host-login`（停 Host → `cindy-host login --method=wechat --no-open` → 重启 Host），`/connect` 也转到登录页。**待用户用微信扫码完成一次真实登录**，确认成功后自动进入 Cindy
 3. [ ] **P1 验收**（需要用户：注册 Cindy 账号（手机号）、提供 DeepSeek 临时 Key）：登录 → 配 DeepSeek → 飞牛窗口内真实任务（流式、停止、权限确认）→ 重启 VM 恢复 → 升级 → 卸载；另在 ext4 估算占用
 
 Adapter 集成时要验证 / 加固（子代理 A 提出）：
@@ -26,7 +26,7 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 
 其他未决：
 
-- [ ] Host 登录遇到「需绑定手机号／选择账号」时失败（`no refresh token`）：临时让用户先在 Cindy 桌面版用同一微信登录并完成绑定；上游 issue 草稿 `docs/upstream/host-login-outcomes/issue.md` 待审阅
+- [ ] Host 登录遇到「需绑定手机号／选择账号」时失败（`no refresh token`）：临时让用户先在 Cindy 桌面版用同一微信登录并完成绑定；上游 issue 草稿见「上游事项」
 - [ ] 升级路径：`fnos-cli app install-fpk` 对已安装应用报 10236「应用已存在」；应用中心「手动安装」升级需要人工在界面上试一次（见平台笔记）
 - [ ] 非管理员账号能否读取应用目录里的 600 文件（管理员可以，见平台笔记 `trimacl`）
 
@@ -50,10 +50,12 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 | 依赖复制去重 | `0002` | [#10406](https://github.com/makecindy/cindy/issues/10406) | [#10419](https://github.com/makecindy/cindy/pull/10419) | #10418 合入后冲突，已变基到 `b975dc3` 并重新验证、回复（2026-11-15），等待复审 |
 | 从文件读取凭据密钥 | `0003` | [#10417](https://github.com/makecindy/cindy/issues/10417) | [#10429](https://github.com/makecindy/cindy/pull/10429) | 触发维护者确认门（[#10437](https://github.com/makecindy/cindy/issues/10437)）；已按分析补 Windows 跳过（`813f482`）并回复，等待维护者 Approve |
 | Host 发行包缺 semver／picomatch | `0005` | [#10587](https://github.com/makecindy/cindy/issues/10587) | [#10589](https://github.com/makecindy/cindy/pull/10589) | 刚提交（2026-11-15）；上游 main 的 Host 发行包启动即崩，`0005` 临时补上 |
+| 网页端启动检查要求 Claude Code+Codex | `0006` | 草稿 `docs/upstream/web-env-check/issue.md` | 草稿 `pr.md`（分支 `fix/web-env-check-bundled-harnesses`，已在构建机验证） | 待审阅；只打包 Pi 时网页端卡在「环境初始化失败」 |
 | Web 子路径部署 | `0004` | 未提 | — | 补丁通用，可作为下一个 issue |
-| Web 首次登录 API | — | 未提 | — | 先在 Adapter 里包装 CLI |
+| Web 首次登录 API | — | 草稿 `docs/upstream/host-web-login/issue.md` | — | 待审阅；过渡方案：Adapter 包装 CLI（国际版 Apple 已走通） |
+| Host 登录结果非 ok 时失败 | — | 草稿 `docs/upstream/host-login-outcomes/issue.md` | — | 待审阅；中国大陆版微信登录因此失败 |
 | Host 手机号登录 | — | 未提 | — | 实测：cn 提供手机号、微信、Apple 三种方式（`/api/auth/providers`），`cindy-host login` 只支持微信/Apple，源码注明手机号未实现；P1 先用微信，手机号登录待写 issue |
-| Host 本地模式（无账号） | — | 未提 | — | 暂缓 |
+| Host 本地模式（无账号） | — | 草稿 `docs/upstream/host-local-mode/issue.md` | — | 待审阅；网页端「跳过登录」无效 |
 
 流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<主题>/`，经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的 `fnos-integration` 分支依次叠加 #10419、#10429、#10589 后导出（`0004` 只在本仓库维护），必须与 PR 代码一致。
 
