@@ -1,0 +1,24 @@
+Subject: web: pass the startup check when any bundled agent is ready
+
+Why: the web shim's checkEnvironment requires Claude Code and Codex, so a
+Host release that bundles only Pi (the fnOS app) never leaves the
+"环境初始化失败" startup screen and the original login UI is unreachable.
+Upstream: not yet proposed (issue draft to follow; related to the merged
+https://github.com/makecindy/cindy/pull/10418).
+Remove when: upstream's web startup check accepts a release without Claude
+Code and Codex.
+
+diff --git a/apps/web/shim.js b/apps/web/shim.js
+index f064ed0e69..0ca2a94fbb 100644
+--- a/apps/web/shim.js
++++ b/apps/web/shim.js
+@@ -512,7 +512,8 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
+     'checkEnvironment': () => {
+       const harness = window.__cindyBoot?.harness ?? {};
+       const entry = (ready) => (ready ? { status: 'passed' } : { status: 'failed', error: 'not installed' });
+-      const allPassed = Boolean(harness['claude-code'] && harness.codex);
++      // A Host release may bundle only some agents (build --harnesses); any ready one is enough.
++      const allPassed = Boolean(harness['claude-code'] || harness.codex || harness.pi);
+       return {
+         claudeCode: entry(harness['claude-code']),
+         codex: entry(harness.codex),
