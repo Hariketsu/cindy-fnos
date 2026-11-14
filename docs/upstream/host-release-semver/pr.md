@@ -1,8 +1,8 @@
 # PR 草稿：Host 发行包补上 semver 与 picomatch
 
-> 状态：**草稿，待用户审阅**
+> 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/pull/10589
 > 关联 issue：makecindy/cindy#10587
-> 分支：本地 `.upstream/cindy` 中的 `fix/host-release-runtime-requires`，基于上游 `main`（`b975dc3`），1 个 commit（`dd865d3`），带 DCO 签名。尚未推送到 fork。
+> 分支：本地 `.upstream/cindy` 中的 `fix/host-release-runtime-requires`，基于上游 `main`（`b975dc3`），1 个 commit（`dd865d3`），带 DCO 签名。
 > 模板：上游 `.github/PULL_REQUEST_TEMPLATE.md`
 > 验证数据均为实测（2026-11-15，linux-arm64，Debian 12，Node 22.22.3，pnpm 11.28.9）。
 
