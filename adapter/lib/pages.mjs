@@ -47,6 +47,8 @@ h1{margin:0;font-size:20px;font-weight:600}
 .sub{margin:4px 0 16px;color:var(--muted);font-size:13px}
 #msg{margin:0 0 12px;color:var(--muted);font-size:13px}
 #msg:empty{display:none}
+#detail{margin:-6px 0 12px;color:var(--muted);font-size:11px;opacity:.8;word-break:break-word}
+#detail:empty{display:none}
 button,.open{display:block;width:100%;height:44px;margin:10px 0 0;border:0;border-radius:999px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none;line-height:44px}
 .primary,.open{background:var(--btn);color:var(--btn-text)}
 .secondary,#cancel{background:var(--btn2);color:var(--text)}
@@ -63,6 +65,7 @@ footer{margin:auto 0 16px;padding-top:16px;color:var(--muted);font-size:12px}
 <h1>欢迎使用 Cindy</h1>
 <p class="sub">登录 Cindy 账号后即可在 NAS 上使用</p>
 <p id="msg" aria-live="polite"></p>
+<p id="detail"></p>
 <div id="methods">${buttons}</div>
 <a id="open" class="open" hidden target="_blank" rel="noopener noreferrer"></a>
 <button id="cancel" type="button" hidden>取消</button>
@@ -85,6 +88,7 @@ function render(s) {
   $('open').hidden = s.state !== 'waiting';
   if (s.method && METHODS[s.method]) method = s.method;
   const m = METHODS[method];
+  $('detail').textContent = s.state === 'failed' && s.reason ? '详细信息：' + s.reason : '';
   if (s.state === 'idle') say('');
   if (s.state === 'starting') say('正在准备登录……');
   if (s.state === 'waiting') { $('open').href = s.url; $('open').textContent = m.open; say(m.hint + '，完成后回到这里，页面会自动继续（5 分钟内有效）。'); }

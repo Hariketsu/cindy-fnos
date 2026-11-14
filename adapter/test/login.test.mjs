@@ -102,7 +102,9 @@ describe('web sign-in', () => {
     await request(sock, { path: `${LOGIN}/start?method=wechat`, ...POST });
     const failed = await until(() => status(sock), s => s.state === 'failed');
     assert.match(failed.reason, /no refresh token/);
-    assert.match((await request(sock, { path: LOGIN })).body, /Cindy 桌面版用同样的方式登录一次/);
+    const page = (await request(sock, { path: LOGIN })).body;
+    assert.match(page, /Cindy 桌面版用同样的方式登录一次/);
+    assert.match(page, /详细信息：/, 'the raw CLI error stays visible for support');
   });
 
   test('cancel stops the running sign-in, and a second start while running does not run it twice', async () => {
