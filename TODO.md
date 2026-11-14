@@ -26,6 +26,7 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 
 其他未决：
 
+- [ ] Host 登录遇到「需绑定手机号／选择账号」时失败（`no refresh token`）：临时让用户先在 Cindy 桌面版用同一微信登录并完成绑定；上游 issue 草稿 `docs/upstream/host-login-outcomes/issue.md` 待审阅
 - [ ] 升级路径：`fnos-cli app install-fpk` 对已安装应用报 10236「应用已存在」；应用中心「手动安装」升级需要人工在界面上试一次（见平台笔记）
 - [ ] 非管理员账号能否读取应用目录里的 600 文件（管理员可以，见平台笔记 `trimacl`）
 

@@ -97,6 +97,14 @@ describe('web sign-in', () => {
     assert.deepEqual(failed, { state: 'failed', reason: 'Error: browser authorization failed: REQUEST_TIMEOUT' });
   });
 
+  test('the sign-in page explains the upstream no-refresh-token failure instead of showing it raw', async () => {
+    const sock = await adapterWith(fakeMain(dir, 'echo "cindy-host login failed: authorization exchange returned no refresh token" >&2; exit 1'));
+    await request(sock, { path: `${LOGIN}/start`, ...POST });
+    const failed = await until(() => status(sock), s => s.state === 'failed');
+    assert.match(failed.reason, /no refresh token/);
+    assert.match((await request(sock, { path: LOGIN })).body, /Cindy 桌面版用同一个微信登录一次/);
+  });
+
   test('cancel stops the running sign-in, and a second start while running does not run it twice', async () => {
     const ran = path.join(dir, 'ran');
     fs.rmSync(ran, { force: true });

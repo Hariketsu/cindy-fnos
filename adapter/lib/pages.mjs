@@ -32,7 +32,10 @@ function render(s) {
   $('open').hidden = s.state !== 'waiting';
   if (s.state === 'starting') say('正在准备登录：暂停 Cindy 服务……');
   if (s.state === 'waiting') { $('open').href = s.url; say('点击下方链接，在新打开的页面用手机微信扫码；完成后回到这里，页面会自动继续（5 分钟内有效）。'); }
-  if (s.state === 'failed') say('登录没有完成：' + (s.reason || '未知原因') + '。可以重试。');
+  // Upstream \`cindy-host login\` only accepts a direct sign-in; a WeChat account that still has to bind a
+  // phone number (or pick one of several accounts) ends with this message.
+  if (s.state === 'failed' && /no refresh token/.test(s.reason || '')) say('微信授权成功，但这个微信还需要先完成账号设置（例如绑定手机号或选择账号），NAS 上暂时无法完成这一步。请先在 Cindy 桌面版用同一个微信登录一次并按提示完成，然后回到这里重试。');
+  else if (s.state === 'failed') say('登录没有完成：' + (s.reason || '未知原因') + '。可以重试。');
   if (s.state === 'cancelled') say('已取消登录。');
   if (s.state === 'succeeded') say(s.ready ? '登录成功，正在打开 Cindy……' : '登录成功，正在重新启动 Cindy……');
   if (s.state === 'succeeded' && s.ready) { clearInterval(timer); location.href = base + '/'; }
