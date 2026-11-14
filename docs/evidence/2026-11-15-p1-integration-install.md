@@ -43,3 +43,15 @@
 - 重启 VM 后自动恢复、升级、卸载。
 - 网关在 GET 和 SSE 请求上是否带 `Origin`（TODO 中的加固项）。
 - x86 真机。
+
+## 补充：网页首次登录（2026-11-15，fpk 0.1.2）
+
+| 项 | 结果 |
+|---|---|
+| 安装向导（应用中心「手动安装」界面） | 显示「选择 Cindy 版本」单选；选国际版后 `TRIM_PKGETC/region` 为 `global`，`/health` 的 `region=global` |
+| 登录页 | 未登录时首页转到 `/_fnos/login`，原版风格，国际版显示 Google、Apple 两个按钮 |
+| 中国大陆版 + 微信（0.1.1） | 微信授权成功，但 `cindy-host login` 失败：`authorization exchange returned no refresh token`（上游只接受 `ok` 结果，见 `docs/upstream/host-login-outcomes/`）；Host 自动重启 |
+| 国际版 + Apple（维护者操作） | **成功**：`login: finished (exit 0)`，Host 重启后 `account.authenticated=true`、`realm=global`、`runtime.state=ready`、`agents=["pi"]`；飞牛窗口内进入 Cindy 主界面 |
+| 取消登录 | Host 自动重启，回到未登录状态 |
+
+未验证：国际版 Google 登录；发送真实任务（需配置模型）；重启 VM 后保持登录。
