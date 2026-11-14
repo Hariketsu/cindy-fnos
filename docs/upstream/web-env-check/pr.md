@@ -1,8 +1,8 @@
 # PR 草稿：网页端启动检查接受只打包部分 Agent 的 Host
 
-> 状态：**草稿，待用户审阅**
-> 关联 issue：待提交（草稿见同目录 `issue.md`），提交后把下文的 `#<issue>` 换成编号
-> 分支：本地 `.upstream/cindy` 中的 `fix/web-env-check-bundled-harnesses`，基于上游 `main`（`b975dc3`），1 个 commit，带 DCO 签名。尚未推送到 fork。
+> 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/pull/10598
+> 关联 issue：makecindy/cindy#10597
+> 分支：本地 `.upstream/cindy` 中的 `fix/web-env-check-bundled-harnesses`，基于上游 `main`（`b975dc3`），1 个 commit，带 DCO 签名。
 > 模板：上游 `.github/PULL_REQUEST_TEMPLATE.md`
 > 验证数据均为实测（2026-11-15，linux-arm64，Debian 12，Node 22.22.3，pnpm 11.28.9）。
 

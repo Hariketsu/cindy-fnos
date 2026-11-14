@@ -3,8 +3,8 @@ Subject: web: pass the startup check when any bundled agent is ready
 Why: the web shim's checkEnvironment requires Claude Code and Codex, so a
 Host release that bundles only Pi (the fnOS app) never leaves the
 "环境初始化失败" startup screen and the original login UI is unreachable.
-Upstream: not yet proposed (issue draft to follow; related to the merged
-https://github.com/makecindy/cindy/pull/10418).
+Upstream: issue https://github.com/makecindy/cindy/issues/10597, PR https://github.com/makecindy/cindy/pull/10598
+(follows the merged https://github.com/makecindy/cindy/pull/10418).
 Remove when: upstream's web startup check accepts a release without Claude
 Code and Codex.
 diff --git a/apps/host/src/web-shim.test.mjs b/apps/host/src/web-shim.test.mjs

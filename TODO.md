@@ -50,14 +50,14 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 | 依赖复制去重 | `0002` | [#10406](https://github.com/makecindy/cindy/issues/10406) | [#10419](https://github.com/makecindy/cindy/pull/10419) | #10418 合入后冲突，已变基到 `b975dc3` 并重新验证、回复（2026-11-15），等待复审 |
 | 从文件读取凭据密钥 | `0003` | [#10417](https://github.com/makecindy/cindy/issues/10417) | [#10429](https://github.com/makecindy/cindy/pull/10429) | 触发维护者确认门（[#10437](https://github.com/makecindy/cindy/issues/10437)）；已按分析补 Windows 跳过（`813f482`）并回复，等待维护者 Approve |
 | Host 发行包缺 semver／picomatch | `0005` | [#10587](https://github.com/makecindy/cindy/issues/10587) | [#10589](https://github.com/makecindy/cindy/pull/10589) | 刚提交（2026-11-15）；上游 main 的 Host 发行包启动即崩，`0005` 临时补上 |
-| 网页端启动检查要求 Claude Code+Codex | `0006` | 草稿 `docs/upstream/web-env-check/issue.md` | 草稿 `pr.md`（分支 `fix/web-env-check-bundled-harnesses`，已在构建机验证） | 待审阅；只打包 Pi 时网页端卡在「环境初始化失败」 |
+| 网页端启动检查要求 Claude Code+Codex | `0006` | [#10597](https://github.com/makecindy/cindy/issues/10597) | [#10598](https://github.com/makecindy/cindy/pull/10598) | 已提交（2026-11-15）；只打包 Pi 时网页端卡在「环境初始化失败」 |
 | Web 子路径部署 | `0004` | 未提 | — | 补丁通用，可作为下一个 issue |
-| Web 首次登录 API | — | 草稿 `docs/upstream/host-web-login/issue.md` | — | 待审阅；过渡方案：Adapter 包装 CLI（国际版 Apple 已走通） |
-| Host 登录结果非 ok 时失败 | — | 草稿 `docs/upstream/host-login-outcomes/issue.md` | — | 待审阅；中国大陆版微信登录因此失败 |
+| Web 首次登录 API | — | [#10600](https://github.com/makecindy/cindy/issues/10600) | — | 已提交；过渡方案：Adapter 包装 CLI（国际版 Apple 已走通） |
+| Host 登录结果非 ok 时失败 | — | [#10599](https://github.com/makecindy/cindy/issues/10599) | — | 已提交；中国大陆版微信登录因此失败 |
 | Host 手机号登录 | — | 未提 | — | 实测：cn 提供手机号、微信、Apple 三种方式（`/api/auth/providers`），`cindy-host login` 只支持微信/Apple，源码注明手机号未实现；P1 先用微信，手机号登录待写 issue |
-| Host 本地模式（无账号） | — | 草稿 `docs/upstream/host-local-mode/issue.md` | — | 待审阅；网页端「跳过登录」无效 |
+| Host 本地模式（无账号） | — | [#10601](https://github.com/makecindy/cindy/issues/10601) | — | 已提交；网页端「跳过登录」无效 |
 
-流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<主题>/`，经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的 `fnos-integration` 分支依次叠加 #10419、#10429、#10589 后导出（`0004` 只在本仓库维护），必须与 PR 代码一致。
+流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<主题>/`，经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的 `fnos-integration` 分支依次叠加 #10419、#10429、#10589、#10598 后导出（`0004` 只在本仓库维护），必须与 PR 代码一致。
 
 ## 暂缓的决定
 

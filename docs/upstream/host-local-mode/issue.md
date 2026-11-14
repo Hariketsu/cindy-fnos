@@ -1,6 +1,6 @@
 # Issue 草稿：独立 Host 的网页端「跳过登录」无效
 
-> 状态：**草稿，待用户审阅**
+> 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/issues/10601
 > 模板：`.github/ISSUE_TEMPLATE/feature_request.yml`（功能建议）。
 > 依赖：网页端要先越过启动检查才能看到登录页，见 `docs/upstream/web-env-check/`。
 

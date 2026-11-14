@@ -1,6 +1,6 @@
 # Issue 草稿：cindy-host login 遇到绑定手机号或选择账号时报「no refresh token」
 
-> 状态：**草稿，待用户审阅**
+> 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/issues/10599
 > 模板：`.github/ISSUE_TEMPLATE/bug_report.yml`（缺陷报告）。
 > 背景：飞牛版 P1 的网页首次登录包装了 `cindy-host login --method=wechat --no-open`；维护者用微信授权后，Host 报 `authorization exchange returned no refresh token`。
 > 未确认的事实：服务器这次返回的具体是哪一种结果（CLI 的报错没有带上），下文按代码推断，已如实写明。
