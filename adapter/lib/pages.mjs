@@ -36,7 +36,7 @@ export function loginPage(prefix, methods = ['wechat']) {
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;background:var(--bg);color:var(--text);
   font:14px/1.5 -apple-system,BlinkMacSystemFont,"Inter","PingFang SC","Microsoft YaHei",system-ui,sans-serif}
-.hero{position:relative;width:min(400px,80vw);margin-top:3vh}
+.hero{position:relative;width:min(400px,80vw,46vh);margin-top:2vh}
 .hero .art{display:block;width:100%;-webkit-mask-image:linear-gradient(#000 72%,transparent);mask-image:linear-gradient(#000 72%,transparent)}
 .hero .wordmark{position:absolute;left:50%;bottom:6%;width:46%;transform:translateX(-50%)}
 .hero .slogan{position:absolute;left:84%;top:52%;width:52%}
@@ -44,14 +44,15 @@ body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:ce
 @media (prefers-color-scheme:dark){.light{display:none}.dark{display:block}}
 .card{width:min(380px,90vw);margin-top:-4px;padding:24px 28px 26px;border:1px solid var(--line);border-radius:20px;background:var(--card);text-align:center}
 h1{margin:0;font-size:20px;font-weight:600}
-.sub{margin:4px 0 20px;color:var(--muted);font-size:13px}
-#msg{min-height:42px;margin:0 0 16px;color:var(--muted);font-size:13px}
+.sub{margin:4px 0 16px;color:var(--muted);font-size:13px}
+#msg{margin:0 0 12px;color:var(--muted);font-size:13px}
+#msg:empty{display:none}
 button,.open{display:block;width:100%;height:44px;margin:10px 0 0;border:0;border-radius:999px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none;line-height:44px}
 .primary,.open{background:var(--btn);color:var(--btn-text)}
 .secondary,#cancel{background:var(--btn2);color:var(--text)}
 button:disabled{opacity:.5;cursor:default}
 [hidden]{display:none!important}
-footer{margin:auto 0 24px;padding-top:24px;color:var(--muted);font-size:12px}
+footer{margin:auto 0 16px;padding-top:16px;color:var(--muted);font-size:12px}
 </style></head><body>
 <div class="hero" aria-hidden="true">
 <img class="art" src="${img('hero@2x')}" alt="">
