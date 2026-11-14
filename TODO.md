@@ -14,7 +14,7 @@
 
 进行中 / 下一步（按顺序）：
 
-1. [ ] **集成构建并装进 VM**：`CINDY_WEB_BASE=/app/cindy/ scripts/build-host.sh arm64` → `scripts/build-fpk.sh arm64` → fnos-cli 安装到 volume 2（btrfs）→ 从飞牛桌面打开。`fpk/` 模板和 `build-fpk.sh` 已写好但**尚未测试**
+1. [x] **集成构建并装进 VM**（2026-11-15）：fpk 装进 volume 2，飞牛桌面两个入口都打开原版界面（未登录状态），请求全部留在前缀内，见 [证据](docs/evidence/2026-11-15-p1-integration-install.md)
 2. [ ] **网页首次登录**：Host 只有 CLI 登录（`cindy-host login`，可能需 `--no-open`）。Adapter 要提供登录页（包装 CLI、显示授权链接/二维码），并接管退出登录后跳转的 `/connect`（目前被白名单拦截）
 3. [ ] **P1 验收**（需要用户：注册 Cindy 账号（手机号）、提供 DeepSeek 临时 Key）：登录 → 配 DeepSeek → 飞牛窗口内真实任务（流式、停止、权限确认）→ 重启 VM 恢复 → 升级 → 卸载；另在 ext4 估算占用
 
@@ -25,6 +25,8 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 - [ ] 同一 NAS 其他端口的页面被视为同源（Origin 只比较主机名）
 
 其他未决：
+
+- [ ] 未登录 Cindy 时，每个打开的页面每秒请求一次 `/events`（409 `owner_runtime_unavailable`），Adapter 每次记一行日志；登录流程完成后复查，必要时在 Adapter 合并重复日志
 
 - [ ] 应用图标：目前是 fnpack 默认图标；Cindy logo 属品牌素材，是否使用待用户决定
 - [ ] 后端开放 API `trim.system.getPlatformConfig` 返回 403（不阻塞，前端接口可用）
