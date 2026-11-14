@@ -17,8 +17,9 @@ export function tempDir() {
 }
 
 /** Mimics the Cindy Host rules the adapter depends on. */
-export async function startFakeHost({ token, sseIntervalMs = 200, sseEvents = 5 }) {
-  const fake = { token, stopping: false, seen: [] };
+export async function startFakeHost({ token, sseIntervalMs = 200, sseEvents = 5, account }) {
+  // `account` (e.g. { authenticated: false }) is reported by /health when set.
+  const fake = { token, stopping: false, seen: [], account };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
     fake.seen.push({ method: req.method, path: url.pathname, headers: req.headers });
@@ -31,7 +32,7 @@ export async function startFakeHost({ token, sseIntervalMs = 200, sseEvents = 5 
         && (!req.headers.origin || req.headers.origin === host.origin);
     } catch {}
     if (!loopback) { json(res, 403, { error: 'origin_not_allowed' }); return; }
-    if (url.pathname === '/health') { json(res, 200, { status: 'ok' }); return; }
+    if (url.pathname === '/health') { json(res, 200, { status: 'ok', ...(fake.account ? { account: fake.account } : {}) }); return; }
     if (req.headers.authorization !== `Bearer ${fake.token}`) { json(res, 401, { error: 'unauthorized' }); return; }
 
     if (req.method === 'GET' && url.pathname === '/') {

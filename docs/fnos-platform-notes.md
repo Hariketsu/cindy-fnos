@@ -79,6 +79,7 @@
 | 共享目录 | `/vol1/@appshare/<app>/...`；目录权限是 `drwx------`，属主为包用户，管理员也要用 sudo 才能直接读取 |
 | 系统自带 | `/usr/bin/python3`（3.11）、git、curl、docker；**没有 Node.js** |
 | `TRIM_SYS_ARCH` | `arm` |
+| 生命周期脚本位置（2026-11-15） | `/var/apps/<app>/cmd/main` 等，属主 root、所有人可执行；**不在 `TRIM_APPDEST` 下**。`/var/apps/<app>/` 里还有指向各目录的符号链接：`target`→`TRIM_APPDEST`、`var`→`TRIM_PKGVAR`、`etc`→`TRIM_PKGETC`、`home`、`tmp`、`meta`。应用进程要回调生命周期脚本时，由脚本用 `readlink -f "$0"` 把自身路径传下去 |
 | `TRIM_DATA_ACCESSIBLE_PATHS` | 启动时读取；之后通过 pickSharedFile 新增的授权**不会**更新到正在运行的进程的环境变量里，要用后端 API 查询 |
 
 ## 存储与文件系统
@@ -87,6 +88,7 @@
 |---|---|---|
 | 存储空间（`/vol1`）文件系统 | ext4，**簇大小 64KB（bigalloc）**，块大小 4KB | 每个文件至少占 64KB。Cindy Host 构建产物有约 29.8 万个文件（表面大小 2.2GB），解压到存储空间后实际占用 **24GB**，而在系统盘（ext4，4KB）上只占 3.1GB。**不能把原样的 Host 产物装进存储空间**，必须先大幅减少文件数量（例如打包或裁剪依赖），或改装到系统分区 |
 | 用户文件区（`/vol1/1000` 等） | 使用飞牛的 ACL 权限模型，POSIX 权限位显示为 `----------`，解压出的文件**没有可执行权限** | 不能在用户目录中直接运行程序。应用的可执行文件要放在应用自己的目录（`@appcenter`）里 |
+| 管理员能否读应用目录里的私有文件（2026-11-15，btrfs `/vol2`） | **能**。`credential.key`、`host-api-token` 是 `-rw------- cindy cindy`，`getfacl` 也只列出属主，但 `Administrators` 组的普通账号（无 sudo、无 capability）可以直接读取；同一账号读 `/etc/shadow` 被拒绝。原因应是 `trimacl` 挂载选项 | 应用目录里的 600 文件只能挡住非管理员（非管理员账号尚未实测）。Cindy 只对管理员开放，未越出信任边界 |
 | btrfs 存储空间 | 用户可以在创建存储空间时选择 btrfs；挂载参数 `discard=async,trimacl,space_cache=v2` | 实测同一份 Host 产物（表面大小 1970MiB，约 29.8 万个文件）占用 **2691MiB**，解压耗时 18 秒；ext4（64KB 簇）上约 24GB。日常开发装在 btrfs 上 |
 | 系统盘（`/`） | ext4，4KB 块；安装后约 63GB，其中已用约 12GB | `install_type=root` 可以把应用装到系统分区，但真实 NAS 的系统分区可能更小，需要评估 |
 
@@ -129,5 +131,6 @@
 - `pickUserFile` / `authorizeUserFile`
 - 主题/语言事件 `$on('os/theme' | 'os/language')`
 - 更长时间（10 分钟以上）的 SSE 空闲
-- 应用升级、卸载的生命周期
+- 应用升级：对已安装的应用再执行 `fnos-cli app install-fpk`（版本更高）会失败，错误码 `10236`，系统日志为「应用 Cindy 安装失败。原因：应用已存在。」；`app update` 只能从应用中心来源下载。通过应用中心「手动安装 → 从电脑上传」升级尚未测通（自动化上传后没有任何反应和日志，可能上传本身没有发生），需要人工在界面上试一次（2026-11-15）
+- 卸载：`fnos-cli app uninstall` 后 `TRIM_PKGVAR`、`TRIM_PKGETC` 中的数据和凭据密钥**保留**，重新安装后沿用（2026-11-15）；界面卸载及 `uninstall_init` 向导的行为尚未测试
 - x86 真机上的差异

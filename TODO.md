@@ -15,7 +15,7 @@
 进行中 / 下一步（按顺序）：
 
 1. [x] **集成构建并装进 VM**（2026-11-15）：fpk 装进 volume 2，飞牛桌面两个入口都打开原版界面（未登录状态），请求全部留在前缀内，见 [证据](docs/evidence/2026-11-15-p1-integration-install.md)
-2. [ ] **网页首次登录**：Host 只有 CLI 登录（`cindy-host login`，可能需 `--no-open`）。Adapter 要提供登录页（包装 CLI、显示授权链接/二维码），并接管退出登录后跳转的 `/connect`（目前被白名单拦截）
+2. [ ] **网页首次登录**（微信）：已实现并在 VM 上走通「未登录 → 登录页 → 暂停 Host → 微信授权页 → 取消 → Host 恢复」。Adapter 的 `/_fnos/login` 运行 `cmd/main host-login`（停 Host → `cindy-host login --method=wechat --no-open` → 重启 Host），`/connect` 也转到登录页。**待用户用微信扫码完成一次真实登录**，确认成功后自动进入 Cindy
 3. [ ] **P1 验收**（需要用户：注册 Cindy 账号（手机号）、提供 DeepSeek 临时 Key）：登录 → 配 DeepSeek → 飞牛窗口内真实任务（流式、停止、权限确认）→ 重启 VM 恢复 → 升级 → 卸载；另在 ext4 估算占用
 
 Adapter 集成时要验证 / 加固（子代理 A 提出）：
@@ -25,6 +25,9 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 - [ ] 同一 NAS 其他端口的页面被视为同源（Origin 只比较主机名）
 
 其他未决：
+
+- [ ] 升级路径：`fnos-cli app install-fpk` 对已安装应用报 10236「应用已存在」；应用中心「手动安装」升级需要人工在界面上试一次（见平台笔记）
+- [ ] 非管理员账号能否读取应用目录里的 600 文件（管理员可以，见平台笔记 `trimacl`）
 
 - [ ] 未登录 Cindy 时，每个打开的页面每秒请求一次 `/events`（409 `owner_runtime_unavailable`），Adapter 每次记一行日志；登录流程完成后复查，必要时在 Adapter 合并重复日志
 
@@ -48,7 +51,7 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 | Host 发行包缺 semver／picomatch | `0005` | [#10587](https://github.com/makecindy/cindy/issues/10587) | [#10589](https://github.com/makecindy/cindy/pull/10589) | 刚提交（2026-11-15）；上游 main 的 Host 发行包启动即崩，`0005` 临时补上 |
 | Web 子路径部署 | `0004` | 未提 | — | 补丁通用，可作为下一个 issue |
 | Web 首次登录 API | — | 未提 | — | 先在 Adapter 里包装 CLI |
-| Host 手机号登录 | — | — | — | 待实测 |
+| Host 手机号登录 | — | 未提 | — | 实测：cn 提供手机号、微信、Apple 三种方式（`/api/auth/providers`），`cindy-host login` 只支持微信/Apple，源码注明手机号未实现；P1 先用微信，手机号登录待写 issue |
 | Host 本地模式（无账号） | — | 未提 | — | 暂缓 |
 
 流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<主题>/`，经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的 `fnos-integration` 分支依次叠加 #10419、#10429、#10589 后导出（`0004` 只在本仓库维护），必须与 PR 代码一致。

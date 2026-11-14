@@ -5,6 +5,7 @@
 //   CINDY_FNOS_PREFIX         Gateway path prefix (default /app/cindy)
 //   CINDY_FNOS_HOST_DATA_DIR  Cindy Host data dir: host-api-token, host-endpoint.json (required)
 //   CINDY_FNOS_HOST_PORT      Fixed Host port; when unset, read from host-endpoint.json
+//   CINDY_FNOS_MAIN           Path of the app's cmd/main; enables the web sign-in (`main host-login`)
 //   CINDY_FNOS_LOG=0          Disable per-request logging
 import path from 'node:path';
 import { createAdapter } from './lib/adapter.mjs';
@@ -24,6 +25,7 @@ const adapter = createAdapter({
   dataDir,
   hostPort,
   prefix: env.CINDY_FNOS_PREFIX || '/app/cindy',
+  loginCommand: env.CINDY_FNOS_MAIN || undefined,
   log: env.CINDY_FNOS_LOG !== '0',
 });
 

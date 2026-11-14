@@ -65,7 +65,7 @@ Renderer 中有一部分功能依赖 Electron 的系统能力，在 Web 版里�
 ## 4. 用户旅程
 
 1. **安装**：在应用中心安装。向导提示需要 Cindy 账号，并说明 Agent 能在授权目录内读写文件、执行命令。安装时生成凭据密钥，创建 `cindy/workspace` 共享目录。
-2. **首次打开**：显示登录页，给出授权链接和二维码，用户在任一设备上完成登录后，页面自动进入 Cindy。
+2. **首次打开**：Host 报告未登录时，Adapter 把首页（以及退出登录后的 `/connect`）转到自己的登录页 `/_fnos/login`。用户点「使用微信登录」后，Adapter 运行 `cmd/main host-login`：先停止 Host（上游 `cindy-host login` 要求 Host 未运行），再运行 `cindy-host login --method=wechat --no-open`，把授权链接交给页面，用户在新标签页里用微信扫码；授权经中国大陆版的托管回调完成，Host 重启后页面自动进入 Cindy。登录期间 `status` 仍报告运行中，取消或失败也会重启 Host。目前只支持微信：上游 Host 尚未实现手机号登录（见 TODO「上游事项」）。
 3. **日常使用**：窗口里就是原版 Cindy。默认工作区是 `cindy/workspace`；选择其他目录时弹出飞牛原生选择器；Agent 的产物可以一键在飞牛文件管理器中打开。
 4. **右键文件**：「打开方式 → 交给 Cindy」进入交接页，可选择新建任务或加入当前任务、选择工作目录。需要授权时调用 `authorizeUserFile`。入口可以在飞牛应用设置里关闭，交接页也提供「记住选择」。
 5. **异常**：启动失败的原因会显示在应用中心（`TRIM_TEMP_LOGFILE`）；运行中出错时，窗口内显示可读的错误页，而不是白屏。
@@ -90,7 +90,8 @@ Cindy 最初是纯桌面产品，业务逻辑大量直接调用 Electron API。�
 
 ## 7. 安全边界
 
-- 飞牛网关只校验「已登录 NAS」；Adapter 再校验「是管理员」；Host bearer 只保存在服务端，不暴露给浏览器。
+- 飞牛网关只校验「已登录 NAS」；Adapter 再校验「是管理员」；Host bearer 只保存在服务端，不暴露给浏览器。登录页和登录接口经过同样的管理员与 Origin 校验；授权链接只含 PKCE challenge 和 `client_state`（哈希），取回授权码用的 `pollSecret` 留在 `cindy-host login` 进程内。
+- **实测：存储空间带 `trimacl` 挂载，飞牛管理员组可以读取应用目录中 600 权限的文件**（凭据密钥、Host API token；见平台笔记）。这与「Cindy 只对管理员开放」的信任边界一致，但文件权限只能挡住非管理员。
 - Agent 以包用户身份运行，不用 root，不加入额外的用户组；只能访问 `cindy/workspace` 和管理员授权的目录。
 - **实测：Cindy 页面与飞牛桌面同源，iframe 也没有 sandbox**（见 [fnos-platform-notes.md](fnos-platform-notes.md)）。Cindy 页面中的脚本可以访问飞牛桌面，相当于拿到了当前用户的飞牛会话。因此 Adapter 必须设置严格的 CSP，Agent 生成的 HTML 必须继续使用上游的沙箱渲染，不能放宽。
 - 凭据与 API Key 只以加密形式保存在应用数据目录中，不进入日志、仓库或前端。

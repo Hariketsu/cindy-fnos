@@ -15,6 +15,8 @@ LOG_DIR="${TRIM_PKGVAR}/logs"
 RUN_DIR="${TRIM_PKGVAR}/run"
 KEY_FILE="${TRIM_PKGETC}/credential.key"
 SOCKET="${APP}/app.sock"
+LOGIN_PID="${RUN_DIR}/login.pid"         # set while `main host-login` runs
+SELF="$(readlink -f "$0")"               # the adapter runs `main host-login` through this path
 
 log() { echo "$(date '+%F %T') $*" >> "${LOG_DIR}/lifecycle.log"; }
 fail() { echo "$1" > "${TRIM_TEMP_LOGFILE}"; log "ERROR: $1"; exit 1; }
@@ -38,27 +40,32 @@ host_env() {
   export CINDY_HOST_CREDENTIAL_KEY_FILE="${KEY_FILE}"
 }
 
-start_app() {
-  mkdir -p "${DATA_DIR}" "${LOG_DIR}" "${RUN_DIR}" || fail "无法创建应用数据目录。"
-  [ -x "${NODE}" ] || fail "应用文件不完整：找不到 Cindy Host 运行时，请重新安装。"
-  ensure_key
-
+start_host() {
   if ! alive "${RUN_DIR}/host.pid"; then
     log "starting host"
     ( host_env; exec "${HOST_DIR}/cindy-host" ) >> "${LOG_DIR}/host.log" 2>&1 &
     echo $! > "${RUN_DIR}/host.pid"
   fi
+}
+
+start_app() {
+  mkdir -p "${DATA_DIR}" "${LOG_DIR}" "${RUN_DIR}" || fail "无法创建应用数据目录。"
+  [ -x "${NODE}" ] || fail "应用文件不完整：找不到 Cindy Host 运行时，请重新安装。"
+  ensure_key
+
+  # A running sign-in has the Host stopped on purpose and restarts it when done.
+  alive "${LOGIN_PID}" || start_host
   if ! alive "${RUN_DIR}/adapter.pid"; then
     log "starting adapter"
     CINDY_FNOS_SOCKET="${SOCKET}" CINDY_FNOS_PREFIX=/app/cindy CINDY_FNOS_HOST_DATA_DIR="${DATA_DIR}" \
-      "${NODE}" "${APP}/adapter/server.mjs" >> "${LOG_DIR}/adapter.log" 2>&1 &
+      CINDY_FNOS_MAIN="${SELF}" "${NODE}" "${APP}/adapter/server.mjs" >> "${LOG_DIR}/adapter.log" 2>&1 &
     echo $! > "${RUN_DIR}/adapter.pid"
   fi
 
   # The adapter answers with a "starting" page until the Host publishes its endpoint,
   # so only fail here if a process died immediately.
   sleep 2
-  alive "${RUN_DIR}/host.pid" || fail "Cindy Host 启动失败，请查看日志：${LOG_DIR}/host.log"
+  alive "${RUN_DIR}/host.pid" || alive "${LOGIN_PID}" || fail "Cindy Host 启动失败，请查看日志：${LOG_DIR}/host.log"
   alive "${RUN_DIR}/adapter.pid" || fail "Cindy 网关适配器启动失败，请查看日志：${LOG_DIR}/adapter.log"
 }
 
@@ -74,10 +81,7 @@ stop_pid() {
   rm -f "${file}"
 }
 
-stop_app() {
-  log "stopping"
-  stop_pid "${RUN_DIR}/adapter.pid"
-  rm -f "${SOCKET}"
+stop_host() {
   # Ask the Host to drain and stop through its own control API first.
   if alive "${RUN_DIR}/host.pid"; then
     ( host_env; "${HOST_DIR}/cindy-host" stop ) >> "${LOG_DIR}/host.log" 2>&1
@@ -85,12 +89,48 @@ stop_app() {
   stop_pid "${RUN_DIR}/host.pid"
 }
 
+stop_app() {
+  log "stopping"
+  # SIGUSR1: abandon a running sign-in without restarting the Host.
+  if alive "${LOGIN_PID}"; then kill -USR1 "$(head -n1 "${LOGIN_PID}" | tr -d '[:space:]')" 2>/dev/null; sleep 1; fi
+  stop_pid "${RUN_DIR}/adapter.pid"
+  rm -f "${SOCKET}"
+  stop_host
+}
+
+# Cindy sign-in for the web page (run by the adapter). `cindy-host login` refuses
+# to run while the Host is up, so stop it, sign in, then start it again whatever
+# the outcome. stdout carries the authorize URL to the adapter.
+login_host() {
+  alive "${LOGIN_PID}" && { echo "a sign-in is already running" >&2; exit 1; }
+  echo $$ > "${LOGIN_PID}"
+  local child="" status=1
+  finish() {
+    [ -n "${child}" ] && kill -TERM "${child}" 2>/dev/null
+    rm -f "${LOGIN_PID}"
+    [ "$1" = restart ] && start_host
+  }
+  trap 'log "login: cancelled"; finish restart; exit 130' TERM INT
+  trap 'log "login: abandoned (app stopping)"; finish; exit 130' USR1
+  log "login: stopping host"
+  stop_host
+  log "login: waiting for authorization"
+  ( host_env; exec "${HOST_DIR}/cindy-host" login --method=wechat --no-open ) &
+  child=$!
+  wait "${child}"; status=$?
+  child=""
+  log "login: finished (exit ${status})"
+  finish restart
+  exit "${status}"
+}
+
 case "$1" in
   start) start_app ;;
   stop) stop_app ;;
   status)
-    if alive "${RUN_DIR}/host.pid" && alive "${RUN_DIR}/adapter.pid"; then exit 0; fi
+    if alive "${RUN_DIR}/adapter.pid" && { alive "${RUN_DIR}/host.pid" || alive "${LOGIN_PID}"; }; then exit 0; fi
     exit 3
     ;;
+  host-login) login_host ;;
   *) exit 1 ;;
 esac

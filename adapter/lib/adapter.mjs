@@ -2,7 +2,8 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import { matchRoute } from './routes.mjs';
-import { FORBIDDEN_PAGE, UNAVAILABLE_PAGE } from './pages.mjs';
+import { createLogin } from './login.mjs';
+import { FORBIDDEN_PAGE, UNAVAILABLE_PAGE, loginPage } from './pages.mjs';
 import { createUpstream } from './upstream.mjs';
 
 // Hook for P2: prefix-relative script URLs injected into index.html right after
@@ -83,6 +84,7 @@ function sendBody(res, status, contentType, body, extra = {}) {
 
 const sendJson = (res, status, value) => sendBody(res, status, 'application/json; charset=utf-8', JSON.stringify(value));
 const sendHtml = (res, status, html, extra) => sendBody(res, status, 'text/html; charset=utf-8', html, extra);
+const redirect = (res, location) => sendBody(res, 302, 'text/plain; charset=utf-8', '', { location });
 
 function sendUnavailable(req, res) {
   if (wantsHtml(req)) sendHtml(res, 503, UNAVAILABLE_PAGE, { 'retry-after': '5' });
@@ -115,6 +117,51 @@ export function createAdapter(config) {
   const log = config.log === false ? () => {} : (config.logger ?? (line => console.log(line)));
   const warn = config.warn ?? (line => console.error(`[cindy-fnos-adapter] ${line}`));
   const upstream = createUpstream({ dataDir: config.dataDir, port: config.hostPort, warn });
+  // The Host restarts on a new port after a sign-in, so drop the cached endpoint.
+  const login = createLogin({ command: config.loginCommand, spawn: config.spawn, warn, onExit: () => upstream.invalidate() });
+  const loginPath = `${prefix}/_fnos/login`;
+
+  /** The Host's /health, or null when it cannot be read right now. */
+  async function hostHealth() {
+    const endpoint = await upstream.endpoint();
+    const token = endpoint && await upstream.token();
+    if (!endpoint || !token) return null;
+    return new Promise(resolve => {
+      const upReq = http.get({
+        host: endpoint.hostname, port: endpoint.port, path: '/health', agent: false, timeout: 3000,
+        headers: { host: endpoint.host, authorization: `Bearer ${token}` },
+      }, upRes => {
+        readAll(upRes, 64 * 1024).then(body => {
+          try { resolve(upRes.statusCode === 200 ? JSON.parse(body.toString('utf8')) : null); } catch { resolve(null); }
+        }, () => resolve(null));
+      });
+      upReq.on('timeout', () => upReq.destroy());
+      upReq.on('error', () => { upstream.invalidate(); resolve(null); });
+    });
+  }
+
+  /** Send the browser to the sign-in page instead of the Cindy UI? */
+  async function needsLogin() {
+    if (!login.available) return false;
+    if (['starting', 'waiting'].includes(login.status().state)) return true;
+    return (await hostHealth())?.account?.authenticated === false;
+  }
+
+  async function handleLogin(req, res, pathname) {
+    const action = pathname.slice('/_fnos/login'.length);
+    const read = req.method === 'GET' || req.method === 'HEAD';
+    if (!login.available) { sendJson(res, 404, { error: 'not_found' }); return; }
+    if (action === '' && read) { sendHtml(res, 200, loginPage(prefix)); return; }
+    if (action === '/status' && read) {
+      const status = login.status();
+      if (status.state === 'succeeded') status.ready = (await hostHealth())?.account?.authenticated === true;
+      sendJson(res, 200, status);
+      return;
+    }
+    if (action === '/start' && req.method === 'POST') { sendJson(res, 202, login.start()); return; }
+    if (action === '/cancel' && req.method === 'POST') { sendJson(res, 202, login.cancel()); return; }
+    sendJson(res, 404, { error: 'not_found' });
+  }
 
   function responseHeaders(upRes, endpoint) {
     const named = connectionTokens(upRes.headers);
@@ -258,8 +305,12 @@ export function createAdapter(config) {
       return;
     }
     if (!originAllowed(req)) { sendJson(res, 403, { error: 'origin_not_allowed' }); return; }
+    if (pathname === '/_fnos/login' || pathname.startsWith('/_fnos/login/')) { await handleLogin(req, res, pathname); return; }
+    // The web client goes to /connect after signing out; on fnOS that is the sign-in page.
+    if (login.available && pathname === '/connect' && (req.method === 'GET' || req.method === 'HEAD')) { redirect(res, loginPath); return; }
     const route = matchRoute(req.method, pathname);
     if (!route) { sendJson(res, 404, { error: 'not_found' }); return; }
+    if (route.kind === 'index' && await needsLogin()) { redirect(res, loginPath); return; }
     await proxy(req, res, route, pathname + url.search);
   }
 
