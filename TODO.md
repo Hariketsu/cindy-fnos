@@ -1,7 +1,7 @@
 # TODO
 
 > 本文回答：还有什么没完成？什么最重要？哪些决定暂缓？
-> 完成一项就更新状态；阶段划分与验收标准见 [docs/plan.md](docs/plan.md)，最近一次交接见 [handoff/](handoff/)。
+> 完成一项就更新状态；阶段划分与验收标准见 [docs/plan.md](docs/plan.md)，最近一次交接见本机的 `handoff/`（不入库）。
 
 ## 当前阶段：P1 · MVP 应用包
 

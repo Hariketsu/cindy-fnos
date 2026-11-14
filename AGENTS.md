@@ -1,7 +1,7 @@
 # Cindy for fnOS：Agent 工作入口
 
 本仓库把上游 [Cindy](https://github.com/makecindy/cindy) 的原版 Renderer 与无界面 Host 打包为飞牛 fnOS 原生应用。
-开始前先读最新的交接文档（[handoff/](handoff/)）、[TODO.md](TODO.md) 和 [docs/architecture.md](docs/architecture.md)。
+开始前先读本机最新的交接文档（`handoff/`，不入库）、[TODO.md](TODO.md) 和 [docs/architecture.md](docs/architecture.md)。
 
 本机环境与个人约定见 @AGENTS.local.md（不入库；新维护者参照 [AGENTS.local.example.md](AGENTS.local.example.md) 自建）。
 
@@ -76,7 +76,7 @@
 
 ## 交接
 
-- 会话结束前，或上下文快用完时，写 `handoff/handoff-<YYYY-MM-DD>-<主题>.md`：当前状态、环境、下一步（附命令）、已知的坑、用户偏好。长期结论放在 `docs/`，交接文档只写「接手要点」。
+- 会话结束前，或上下文快用完时，写 `handoff/handoff-<YYYY-MM-DD>-<主题>.md`：当前状态、环境、下一步（附命令）、已知的坑、用户偏好。长期结论放在 `docs/`，交接文档只写「接手要点」。`handoff/` 已被 git 忽略：交接文档会写到本机环境和维护者偏好，不进入公开仓库。
 - 新会话先读最新的交接文档，再读 TODO.md。
 
 ## Git
