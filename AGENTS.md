@@ -25,10 +25,11 @@
    - issue 使用上游 `.github/ISSUE_TEMPLATE/` 中对应的模板。功能建议填「使用场景 / 当前问题 / 期望方案 / 已考虑的替代方案」；缺陷填「问题描述 / 环境 / 复现步骤 / 日志与截图」。
    - PR 标题格式是 `<type>(<scope>): <简短描述>`，正文完整填写 `.github/PULL_REQUEST_TEMPLATE.md` 的各节：改了什么、范围、UI 变化、怎么验证的（附实际命令和结果）、未执行的验证、风险与回滚、提交前检查。
    - 每个 commit 都带 DCO 签名（`git commit -s`），一个 PR 只解决一个问题，并遵守上游 `CONTRIBUTING.md` 与相关专题规则（如测试价值门槛）。
-4. 对审查意见的回复同样先写草稿（如 `docs/upstream/<主题>/review-reply.md`），经用户审阅后再发出。
-5. PR 分支放在被忽略的 `.upstream/cindy` 中（`origin` 指向上游，`fork` 指向贡献者的 fork），基于上游最新的 `main`。本地补丁 `patches/0001-…` 必须与 PR 代码一致：把各 PR 分支叠加到一个集成分支上再导出，并确认所有补丁能按顺序应用到 `upstream.lock` 中的 commit。
-6. 声称「行为不变」之类的结论要有可复现的证据（例如依赖去重用 `tools/release-resolution-check.mjs` 逐条比较解析结果），不能只靠抽样。
-7. issue/PR 合入后，删除 `patches/` 中对应的补丁，同步更新 `docs/plan.md` 和 `TODO.md` 的「上游事项」。
+4. **截图要说清来源。** issue/PR 里的截图如果包含本项目自己的页面或文案（例如 Adapter 的登录页、我们写的提示），必须在截图旁写明哪些是本项目加的、哪些是上游原样，避免维护者把它当成 Cindy 的界面。截图草稿放在对应的 `docs/upstream/<主题>/` 目录。
+5. 对审查意见的回复同样先写草稿（如 `docs/upstream/<主题>/review-reply.md`），经用户审阅后再发出。
+6. PR 分支放在被忽略的 `.upstream/cindy` 中（`origin` 指向上游，`fork` 指向贡献者的 fork），基于上游最新的 `main`。本地补丁 `patches/0001-…` 必须与 PR 代码一致：把各 PR 分支叠加到一个集成分支上再导出，并确认所有补丁能按顺序应用到 `upstream.lock` 中的 commit。
+7. 声称「行为不变」之类的结论要有可复现的证据（例如依赖去重用 `tools/release-resolution-check.mjs` 逐条比较解析结果），不能只靠抽样。
+8. issue/PR 合入后，删除 `patches/` 中对应的补丁，同步更新 `docs/plan.md` 和 `TODO.md` 的「上游事项」。
 
 ## 安全底线
 

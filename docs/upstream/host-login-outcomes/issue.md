@@ -62,6 +62,10 @@ https://auth.cindy.com.cn/api/auth/social/wechat/authorize?client_type=desktop&d
 cindy-host login failed: authorization exchange returned no refresh token
 ```
 
-下图是我们在 NAS 上包装 `cindy-host login` 的登录页（上面的中文提示是我们自己的文案），「详细信息」一行即 CLI 的原始报错：
+下图需要说明一下，以免误会：
+
+- **这不是 Cindy 的界面。** 截图里的页面是飞牛版自己写的登录页（仿照 Cindy 原版登录页的样式），用来在 NAS 上包装 `cindy-host login`；
+- **页面上的中文提示不是 Cindy 的文案。**「授权成功，但这个账号还需要先完成设置……请先在 Cindy 桌面版用同样的方式登录一次……」是我们针对这个报错写的说明；
+- **只有「详细信息：」后面的英文是 `cindy-host login` 的原始输出**，来自 `apps/host/src/main.ts`（`cindy-host login failed:` 前缀）和 `apps/host/src/auth/login.mjs`。
 
 ![微信授权后 cindy-host login 报 no refresh token](wechat-no-refresh-token.png)
