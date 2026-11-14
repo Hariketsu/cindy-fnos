@@ -2,7 +2,7 @@
 
 > 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/pull/10419
 > 更新：根据 Greptile 审查（P1）改为「完整复制后再去重」，追加 commit `c7f5210`；下面的正文是更新后的版本，已于 2026-11-14 经用户审阅后替换 PR 描述。验证数据均为实测（2026-11-13，linux-arm64，Debian 12，基于 `f58aada`）。
-> 再次更新（2026-11-15，草稿，待用户审阅）：#10418 合入后变基到 `main` `b975dc3`，「怎么验证的」中的数据换成变基后的实测（pnpm 11.28.9）；「第一个 commit」一行保留 `f58aada` 上的旧数据并注明。
+> 再次更新（2026-11-15，经用户审阅，已替换 PR 描述）：#10418 合入后变基到 `main` `b975dc3`，「怎么验证的」中的数据换成变基后的实测（pnpm 11.28.9）；「第一个 commit」一行保留 `f58aada` 上的旧数据并注明。
 > 关联 issue：makecindy/cindy#10406（分诊机器人已表示方向接受，并给出实现与验收要求，本 PR 均已按要求处理）
 > 分支：本地 `.upstream/cindy` 中的 `perf/host-dedupe-dependency-copies`，基于上游 `main`（`b975dc3`），2 个 commit，带 DCO 签名
 > 模板：上游 `.github/PULL_REQUEST_TEMPLATE.md`
@@ -79,7 +79,7 @@ dependency edges checked 1309 (unresolved in both: 61), differences 0
 当前版本的其他验证：
 
 - 对 `@aws-sdk/client-bedrock-runtime`、`openai`、`@google/genai`、`@modelcontextprotocol/sdk`、`@anthropic-ai/claude-agent-sdk`、`better-sqlite3`、`sharp`、`node-pty`、`exceljs`、`drizzle-orm`、`remark-gfm`、`playwright-core` 逐个做动态导入：后 8 个成功；前 4 个在 `main` 的产物中同样无法导入（这些包在当前 `main` 上不再作为根目录运行时依赖复制），两边结果完全一致。
-- `CINDY_TEST_HOST_RELEASE=<构建目录> node apps/host/scripts/lifecycle.e2e.mjs`：当前 `main` 的产物缺少 `semver`，启动即退出（`main` 与本 PR 相同，与本 PR 无关，另开 issue）；手动补上 `semver` 后，`main` 与本 PR 的产物都是 exit 0，两项 PASS。
+- `CINDY_TEST_HOST_RELEASE=<构建目录> node apps/host/scripts/lifecycle.e2e.mjs`：当前 `main` 的产物缺少 `semver`，启动即退出（`main` 与本 PR 相同，与本 PR 无关，见 #10587）；手动补上 `semver` 后，`main` 与本 PR 的产物都是 exit 0，两项 PASS。
 - `SHA256SUMS.json`：逐个文件校验全部一致。
 - `runtime-dependencies.json`：741 条记录对应的目录全部存在。
 

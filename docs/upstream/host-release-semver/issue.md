@@ -1,8 +1,8 @@
 # Issue 草稿：Host 发行包缺少 semver 和 picomatch，启动即退出
 
-> 状态：**草稿，待用户审阅**
+> 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/issues/10587
 > 模板：`.github/ISSUE_TEMPLATE/bug_report.yml`（缺陷报告）。
-> 是否附带 PR 由用户决定。修法推荐方案 C（在 `build.mjs` 中显式列出），已在构建机原型验证，待用户确认。
+> 是否附带 PR 由用户决定。修法采用方案 C（在 `build.mjs` 中显式列出），经用户确认。
 
 **标题**：`bug: 独立 Host 发行包缺少 semver 和 picomatch，启动时 Cannot find module 'semver'`
 

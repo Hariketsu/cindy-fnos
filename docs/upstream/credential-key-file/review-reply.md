@@ -1,6 +1,6 @@
 # 回复草稿：PR #10429 的 Windows 测试问题（#10437 分析中的技术阻断点）
 
-> 状态：**草稿，待用户审阅**
+> 状态：**已发出**（经用户审阅）：https://github.com/makecindy/cindy/pull/10429#issuecomment-6881428424
 > 发布位置：PR #10429 的普通评论。#10437 是维护者确认用的 issue，不在那里回复，以免分散讨论。
 > 同时推送新 commit `813f482`（`test(host): skip credential key file cases on Windows`）到 fork 的 `feat/host-credential-key-file`。不变基：PR 目前与 `main` 没有冲突。
 

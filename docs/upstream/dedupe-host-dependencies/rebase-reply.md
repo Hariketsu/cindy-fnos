@@ -1,6 +1,6 @@
 # 回复草稿：PR #10419 变基到最新 main
 
-> 状态：**草稿，待用户审阅**
+> 状态：**已发出**（经用户审阅）：https://github.com/makecindy/cindy/pull/10419#issuecomment-6881428021
 > 发布位置：PR #10419 的普通评论（不是行内回复）。
 > 同时强制推送变基后的分支到 fork（`perf/host-dedupe-dependency-copies`，`781fe8e`），并把 PR 描述「手工验证」一节的数据换成下文的新数据（见 `pr.md`）。
 
@@ -31,4 +31,4 @@ dependency edges checked 1309 (unresolved in both: 61), differences 0
 
 本 PR 的产物：`SHA256SUMS.json` 32,742 个文件全部一致；`runtime-dependencies.json` 741 条记录对应的目录全部存在。PR 描述中列出的 12 个包逐个动态导入，`main` 与本 PR 的结果完全一致（8 个成功；`@aws-sdk/client-bedrock-runtime`、`openai`、`@google/genai`、`@modelcontextprotocol/sdk` 两边都无法从根目录导入，当前 `main` 不再把它们作为根目录运行时依赖复制）。
 
-另外发现一个与本 PR 无关的问题：当前 `main` 构建的 Host 发行包启动时报 `Cannot find module 'semver'`，`main` 和本 PR 的产物都一样，所以 `lifecycle.e2e.mjs` 在两者上都失败。手动把 `semver` 放进两个产物的 `node_modules` 后，`lifecycle.e2e.mjs` 在两者上都通过（各 2 项 PASS）。这个问题我会另开 issue。
+另外发现一个与本 PR 无关的问题：当前 `main` 构建的 Host 发行包启动时报 `Cannot find module 'semver'`，`main` 和本 PR 的产物都一样，所以 `lifecycle.e2e.mjs` 在两者上都失败。手动把 `semver` 放进两个产物的 `node_modules` 后，`lifecycle.e2e.mjs` 在两者上都通过（各 2 项 PASS）。见 #10587。
