@@ -63,6 +63,7 @@ pnpm check:test-hygiene
 | | 修复前 | 修复后 |
 |---|---|---|
 | 网页端启动 | 停在「环境初始化失败」 | 显示登录页 |
+| 截图 | ![修复前](before-env-failed.png) | ![修复后](after-login-page.png) |
 | 登录后 | — | 进入主界面；`/health`：`runtime.state=ready`、`agents=["pi"]` |
 
 ### 未执行的验证

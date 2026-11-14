@@ -4,6 +4,7 @@
 > 模板：`.github/ISSUE_TEMPLATE/feature_request.yml`（功能建议）。
 > 背景：飞牛版目前用 Adapter 包装 `cindy-host login` 作为过渡（见 `docs/architecture.md`「用户旅程」）；本 issue 请求上游在 Host 里提供网页端登录。
 > 依赖：网页端要先越过启动检查才能看到登录页，见 `docs/upstream/web-env-check/`。
+> 截图：同目录 `login-page-without-methods.png`（提交时上传到 issue）。拍摄于 2026-11-15，飞牛 fnOS 虚拟机，国际版，全新安装、未登录，已带启动检查的修复。
 
 **标题**：`feat(host): 独立 Host 的网页端支持首次登录与重新登录`
 
@@ -17,7 +18,9 @@
 
 ### 当前问题 / Current limitation
 
-1. **网页端没有登录入口。** Renderer 的登录页可以显示（解决启动检查问题后），但 `apps/web/shim.js` 没有实现登录所需的接口：`authGetLoginState` 固定返回 `{ step: 'entry' }`，登录页里不出现任何登录方式；退出登录后跳转到 `/connect`。
+1. **网页端没有登录入口。** Renderer 的登录页可以显示（解决启动检查问题后），但 `apps/web/shim.js` 没有实现登录所需的接口：`authGetLoginState` 固定返回 `{ step: 'entry' }`，登录页里不出现任何登录方式（国际版本应有邮箱、Apple、Google），只有一个「继续」按钮；退出登录后跳转到 `/connect`。
+
+   ![网页端登录页没有任何登录方式](login-page-without-methods.png)
 2. **唯一的登录方式是 CLI，而且要先停掉 Host。** `cindy-host login` 在 Host 运行时报错 `Stop Cindy Host before changing its sign-in, then start it again.`。所以网页端无法在 Host 运行期间发起登录；外部包装只能「停止 Host → 运行 CLI → 重启 Host」，期间服务中断。
 3. **CLI 只支持社交登录。** `docs/host/architecture-and-status.md` 已注明「只支持浏览器社交登录；email/phone 验证码流程未实现」。中国大陆版的账号以手机号为准（`/api/auth/providers` 返回 `"attribution":"phone"`），国际版的邮箱验证码需要 Turnstile 人机验证（`captcha.requiredFor: ["email_request_code"]`）。另外，社交登录的兑换结果不是 `ok` 时（需绑定手机号、选择账号）CLI 直接失败，单独报告见 #<host-login-outcomes issue>。
 

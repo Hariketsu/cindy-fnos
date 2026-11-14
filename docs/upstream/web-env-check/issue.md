@@ -3,6 +3,7 @@
 > 状态：**草稿，待用户审阅**
 > 模板：`.github/ISSUE_TEMPLATE/bug_report.yml`（缺陷报告）。
 > 对应本地补丁 `patches/0006-web-env-check-bundled-harnesses.patch`；修复 PR 草稿见同目录 `pr.md`。
+> 截图：同目录 `before-env-failed.png`、`after-login-page.png`（提交时上传到 issue，替换下文的相对路径）。拍摄于 2026-11-15，飞牛 fnOS 虚拟机，全新安装、未登录；「修复前」为临时把发行包中 `shim.js` 的这一行换回上游原文后拍摄。
 
 **标题**：`bug: 用 --harnesses 只打包 Pi 的独立 Host，网页端启动检查永远失败`
 
@@ -37,4 +38,12 @@ const allPassed = Boolean(harness['claude-code'] && harness.codex);
 
 ### 日志与截图 / Logs & screenshots
 
-把 `allPassed` 改为任一 Agent 就绪即通过后，同一个发行包会正常显示登录页，登录后进入主界面（`runtime.state=ready`、`agents=["pi"]`）。
+当前行为（只打包 Pi，未登录）：
+
+![启动页停在「环境初始化失败」](before-env-failed.png)
+
+把 `allPassed` 改为任一 Agent 就绪即通过后，同一个发行包显示登录页（登录方式为空的问题另见 #<host-web-login issue>）：
+
+![显示登录页](after-login-page.png)
+
+登录后进入主界面（`runtime.state=ready`、`agents=["pi"]`）。
