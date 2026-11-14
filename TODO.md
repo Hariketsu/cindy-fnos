@@ -15,7 +15,7 @@
 进行中 / 下一步（按顺序）：
 
 1. [x] **集成构建并装进 VM**（2026-11-15）：fpk 装进 volume 2，飞牛桌面两个入口都打开原版界面（未登录状态），请求全部留在前缀内，见 [证据](docs/evidence/2026-11-15-p1-integration-install.md)
-2. [x] **网页首次登录**（2026-11-15）：安装向导选择版本（中国大陆版：微信；国际版：Google、Apple），Adapter 登录页（原版风格）包装 CLI；国际版 Apple 登录成功进入主界面，见证据。中国大陆版微信登录受上游限制失败（见「上游事项」）。原始记录：已实现并在 VM 上走通「未登录 → 登录页 → 暂停 Host → 微信授权页 → 取消 → Host 恢复」。Adapter 的 `/_fnos/login` 运行 `cmd/main host-login`（停 Host → `cindy-host login --method=wechat --no-open` → 重启 Host），`/connect` 也转到登录页。**待用户用微信扫码完成一次真实登录**，确认成功后自动进入 Cindy
+2. [x] **网页首次登录**（2026-11-15）：安装向导选择版本（中国大陆版：微信；国际版：Google、Apple）；Adapter 的 `/_fnos/login`（原版风格）运行 `cmd/main host-login <方式>`（停 Host → `cindy-host login --no-open` → 重启 Host），`/connect` 也转到登录页。国际版 Apple 登录成功进入主界面，见 [证据](docs/evidence/2026-11-15-p1-integration-install.md)；中国大陆版微信登录受上游限制失败（见「上游事项」）
 3. [ ] **P1 验收**（需要用户：注册 Cindy 账号（手机号）、提供 DeepSeek 临时 Key）：登录 → 配 DeepSeek → 飞牛窗口内真实任务（流式、停止、权限确认）→ 重启 VM 恢复 → 升级 → 卸载；另在 ext4 估算占用
 
 Adapter 集成时要验证 / 加固（子代理 A 提出）：
