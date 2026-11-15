@@ -105,6 +105,22 @@ scripts/build-host.sh arm64     # 开发 VM 用；真机用 amd64
 - Host 构建需要 Playwright 的 Chromium，脚本用同版本的 `playwright-core` CLI 安装。
 - 不要把产物解压到存储空间或用户文件区来测试：前者 64KB 的簇会让占用膨胀到 24GB，后者没有可执行权限（见 [fnos-platform-notes.md](fnos-platform-notes.md)）。
 
+### 打包 fpk 并装进 VM
+
+飞牛经网关把应用放在 `/app/cindy/` 下，打包用的 Host 必须带上这个前缀构建：
+
+```bash
+CINDY_WEB_BASE=/app/cindy/ scripts/build-host.sh arm64      # 已有构建机时加 CINDY_BUILD_MACHINE=<名字>
+CINDY_FNOS_VERSION=<版本> scripts/build-fpk.sh arm64          # 输出 build/fpk/cindy-<版本>-arm64.fpk
+
+F() { .agents/skills/fnos-cli/scripts/fnos-cli --profile dev-vm --allow-insecure-http "$@"; }
+F app install-fpk build/fpk/cindy-<版本>-arm64.fpk --volume-id 2 \
+  --custom-parameters '[{"key":"wizard_region","value":"global"}]' --dry-run --yes   # 先预检，再去掉 --dry-run
+```
+
+- `--custom-parameters` 代替安装向导里的版本选择（`cn` 或 `global`）。
+- 已安装时 `install-fpk` 会报 10236「应用已存在」，要先 `F app uninstall cindy --yes`。卸载后数据目录仍会保留，干净重装还要用 sudo 删除 `@appdata`、`@appconf`、`@apphome`、`@appshare`、`@appmeta` 下的 `cindy`（见平台笔记），然后执行 `sudo fstrim -av`。
+
 ### 磁盘空间
 
 开发环境很占空间，Mac 上至少要留 **40GB**：

@@ -1,6 +1,6 @@
 # 适配计划
 
-> 最近更新：2026-11-13 · 上游基线：`makecindy/cindy@ca5c048`
+> 最近更新：2026-11-15 · 上游基线：`makecindy/cindy@b975dc3`
 >
 > 本文记录**做什么、按什么顺序做、每一步怎样才算完成**。系统如何工作见 [architecture.md](architecture.md)，
 > 开发与验证环境见 [development.md](development.md)，当前进度见根目录 [TODO.md](../TODO.md)。
@@ -17,7 +17,7 @@
 | UI 路线 | 复用 Cindy 原版 Renderer + 无界面 Cindy Host | 界面像素级一致且由用户浏览器渲染；不选 Electron + 远程画面（输入法、清晰度、延迟都会打折扣） |
 | 上游关系 | 上游优先：不 fork，锁定 commit；缺的能力先写 issue、再提关联 issue 的 PR（都先经用户审阅），等待期间才用 `patches/` 小补丁 | 降低长期跟进成本，让功能随上游完善 |
 | 账号 | 贴合官方，使用 Cindy 账号登录（Host 的官方用法） | 账号承载远程访问、手机遥控、模型共享等核心价值 |
-| 开发期模型 | 登录账号后添加 DeepSeek 自定义供应商，测试任务走用户提供的临时 Key | 不消耗 Cindy 额度 |
+| 开发期模型 | 使用 Cindy 账号提供的模型（Cindy AI，已用 GLM 5.3 Flash 走通）；自带 Key 的 DeepSeek 供应商待上游 Host 支持后再接入（[#10644](https://github.com/makecindy/cindy/issues/10644)） | 原计划用用户的临时 DeepSeek Key 以不消耗 Cindy 额度，但网页端保存自定义供应商需要的 Host 接口尚不存在（2026-11-15） |
 | 内置 Agent | **只内置 Pi**（另带 ripgrep 工具），不内置 Claude Code、Codex | 用户要求；也能减小包体积 |
 | Chromium | 内置 | 浏览器自动化与插件沙箱需要 |
 | 凭据密钥 | 应用自管：安装时生成，存于 `etc/`（0600，仅包用户可读） | 飞牛没有 Secret Service；NAS 重启后能自动恢复 |
@@ -29,16 +29,18 @@
 
 ## 3. 需要上游配合的事项
 
-每项都先写 issue，再提 PR 并在 PR 中关联 issue；草稿放在 `docs/upstream/`，经用户审阅后才提交（流程见 AGENTS.md「向上游 Cindy 贡献」）。等待合入期间，用 `patches/` 中的补丁过渡。每项在 [TODO.md](../TODO.md) 中跟踪状态。
+每项都先写 issue，再提 PR 并在 PR 中关联 issue；草稿放在 `docs/upstream/<序号>-<主题>/`，经用户审阅后才提交（流程见 AGENTS.md「向上游 Cindy 贡献」）。等待合入期间，用 `patches/` 中的补丁过渡。每项在 [TODO.md](../TODO.md) 中跟踪状态。
 
 | 事项 | 现状 | 需要 |
 |---|---|---|
-| 子路径部署 | Shim 与连接页写死根路径（`/api`、`/events`、`/chat`、`/connect`） | 可配置 base path（Renderer 资源可用 `vite build --base` 解决，无需改动） |
-| 无 Secret Service 的凭据 | Linux 只能用 `secret-tool` | 从文件注入密钥（`createCredentialStore` 已有 `keyPromise` 注入点，只差接线） |
-| 可选 harness | `build.mjs` 要求四个 harness 全部存在 | 构建时可选，Runtime 在缺少某个 harness 时显示「不可用」 |
-| Web 首次登录 | 只能用 `cindy-host login` CLI | 浏览器内登录 API；在此之前由 Adapter 包装 CLI |
-| 手机号登录 | Host 文档称只验证过 Google/Apple | 实测；不通则提 issue |
-| Host 本地模式（无账号） | Host 拒绝在无账号时启动 Runtime | 提 issue，作为后续可选能力 |
+| 子路径部署 | Shim 写死根路径（`/api`、`/events`、`/chat`、`/connect`） | 可配置 base path（Renderer 资源用 `vite build --base` 解决）；[#10614](https://github.com/makecindy/cindy/issues/10614)，PR 待提 |
+| 无 Secret Service 的凭据 | Linux 只能用 `secret-tool` | 从文件注入密钥；[#10429](https://github.com/makecindy/cindy/pull/10429) 等维护者确认 |
+| 可选 harness | 已合入（[#10418](https://github.com/makecindy/cindy/pull/10418)） | 只打包部分 Agent 后的连带问题：启动检查（[#10598](https://github.com/makecindy/cindy/pull/10598)）、模型目录（[#10642](https://github.com/makecindy/cindy/pull/10642)） |
+| Host 发行包可启动 | 缺 `semver`、`picomatch`，启动即崩 | [#10589](https://github.com/makecindy/cindy/pull/10589) |
+| Web 首次登录 | 只能用 `cindy-host login` CLI，且只支持社交登录 | 浏览器内登录 API（[#10600](https://github.com/makecindy/cindy/issues/10600)）；在此之前由 Adapter 包装 CLI。中国大陆版微信登录另受 [#10599](https://github.com/makecindy/cindy/issues/10599) 影响 |
+| 网页端模型选择器 | 打开即崩溃（`modelGroups.get` 被兜底成 `null`） | [#10643](https://github.com/makecindy/cindy/pull/10643) |
+| 自定义模型供应商 | 网页端无法保存（Host 无写入接口） | [#10644](https://github.com/makecindy/cindy/issues/10644)，等维护者确认方向 |
+| Host 本地模式（无账号） | Host 拒绝在无账号时启动 Runtime | [#10601](https://github.com/makecindy/cindy/issues/10601)，作为后续可选能力 |
 
 `X-Frame-Options`、Host 头校验这类问题由 Adapter 的反向代理处理（这是反向代理的正常职责），不需要上游改动。
 
@@ -70,7 +72,7 @@
 - Adapter：管理员校验、前缀适配、代理改写、首次登录页、未就绪页与错误页。
 - 数据：profile 放在 `var/`，密钥放在 `etc/`；升级时保留。
 
-**验收**（在干净基线上）：安装 → 登录 Cindy 账号 → 配置 DeepSeek → 在飞牛窗口中完成一轮真实任务（流式回复、停止、权限确认）→ 重启 VM 后自动恢复 → 升级 → 卸载。另外，**必须把安装包装到 ext4（64KB 簇）存储空间上**，记录实际占用，确认在可接受范围内（目标待定，建议 1GB 以内）。
+**验收**（在干净基线上）：安装 → 登录 Cindy 账号 → 用 Cindy 账号提供的模型在飞牛窗口中完成一轮真实任务（流式回复、停止、权限确认）→ 重启 VM 后自动恢复 → 升级 → 卸载。（原计划的「配置 DeepSeek」改为等上游支持自定义供应商后再验，见第 2 节「开发期模型」。）另外，**必须把安装包装到 ext4（64KB 簇）存储空间上**，记录实际占用，确认在可接受范围内（目标待定，建议 1GB 以内）。
 
 ### P2 · 飞牛原生整合
 

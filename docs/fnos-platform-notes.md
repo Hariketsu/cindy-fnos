@@ -81,6 +81,7 @@
 | `TRIM_SYS_ARCH` | `arm` |
 | `PATH`（2026-11-15） | **安装完成后自动启动时，生命周期脚本的环境里没有 `PATH`**（`/proc/<pid>/environ` 中不存在该变量）。bash 脚本本身能运行，因为 bash 会退回内置的默认搜索路径；但它启动的子进程没有：Host 里的 `/bin/sh` 调用报 `head: not found`、`hostname: not found`。经 `fnos-cli app start` 启动时子进程看到的是 `/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:.`，这正是 Debian bash 在 `env -i` 下的内置默认值（末尾带 `.`），不一定来自飞牛。`cmd/main` 开头固定导出不含 `.` 的 `PATH` |
 | 生命周期脚本位置（2026-11-15） | `/var/apps/<app>/cmd/main` 等，属主 root、所有人可执行；**不在 `TRIM_APPDEST` 下**。`/var/apps/<app>/` 里还有指向各目录的符号链接：`target`→`TRIM_APPDEST`、`var`→`TRIM_PKGVAR`、`etc`→`TRIM_PKGETC`、`home`、`tmp`、`meta`。应用进程要回调生命周期脚本时，由脚本用 `readlink -f "$0"` 把自身路径传下去 |
+| 安装向导参数（2026-11-15） | `fnos-cli app install-fpk <fpk> --volume-id <id> --custom-parameters '[{"key":"wizard_region","value":"global"}]'` 等同于在应用中心向导里做选择：`install_callback` 收到 `wizard_region=global`。自动化安装国际版不必走界面 |
 | `TRIM_DATA_ACCESSIBLE_PATHS` | 启动时读取；之后通过 pickSharedFile 新增的授权**不会**更新到正在运行的进程的环境变量里，要用后端 API 查询 |
 
 ## 存储与文件系统
@@ -133,5 +134,5 @@
 - 主题/语言事件 `$on('os/theme' | 'os/language')`
 - 更长时间（10 分钟以上）的 SSE 空闲
 - 应用升级：对已安装的应用再执行 `fnos-cli app install-fpk`（版本更高）会失败，错误码 `10236`，系统日志为「应用 Cindy 安装失败。原因：应用已存在。」；`app update` 只能从应用中心来源下载。通过应用中心「手动安装 → 从电脑上传」升级尚未测通（自动化上传后没有任何反应和日志，可能上传本身没有发生），需要人工在界面上试一次（2026-11-15）
-- 卸载：`fnos-cli app uninstall` 后 `TRIM_PKGVAR`、`TRIM_PKGETC` 中的数据和凭据密钥**保留**，重新安装后沿用（2026-11-15）；界面卸载及 `uninstall_init` 向导的行为尚未测试
+- 卸载：`fnos-cli app uninstall` 后 `TRIM_PKGVAR`、`TRIM_PKGETC` 中的数据和凭据密钥**保留**，重新安装后沿用（2026-11-15）；`@apphome`、`@appshare`、`@appmeta` 下的应用目录也会留下。干净重装要用 sudo 删除这五个目录。界面卸载及 `uninstall_init` 向导的行为尚未测试
 - x86 真机上的差异
