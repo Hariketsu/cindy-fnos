@@ -4,7 +4,7 @@
 > 模板：`.github/ISSUE_TEMPLATE/bug_report.yml`（缺陷报告）。
 > 修复 PR 草稿见同目录 `pr.md`（分支 `fix/web-model-groups-unsupported`）。
 > 查重（2026-11-15）：按「modelGroups」「模型组 网页」「界面出错了 模型」「Cannot read properties of null routes」搜索 issue 和 PR，没有重复。上游 `docs/host/channel-coverage.md` 把 `model-groups:*` 七个通道列为 A 类（应由后台处理），目前都未接入。
-> 截图：没有崩溃时的截图，用错误详情代替。同目录 `after-picker.png` 是修复后的选择器（拍摄时 VM 上同时带有 capabilities 问题的临时修复，见 `../host-partial-harness-catalog/`，否则选择器里没有模型）。截图是网页端整页，没有飞牛窗口外框。
+> 截图：没有崩溃时的截图，用错误详情代替。同目录 `after-picker.png` 是修复后的选择器（拍摄时 VM 上同时带有 capabilities 问题的临时修复，见 `../10-host-partial-harness-catalog/`，否则选择器里没有模型）。截图是网页端整页，没有飞牛窗口外框。
 
 **标题**：`bug: 网页端打开模型选择器时界面崩溃：Cannot read properties of null (reading 'routes')`
 

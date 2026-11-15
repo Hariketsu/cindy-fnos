@@ -3,7 +3,7 @@
 > 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/issues/10600
 > 模板：`.github/ISSUE_TEMPLATE/feature_request.yml`（功能建议）。
 > 背景：飞牛版目前用 Adapter 包装 `cindy-host login` 作为过渡（见 `docs/architecture.md`「用户旅程」）；本 issue 请求上游在 Host 里提供网页端登录。
-> 依赖：网页端要先越过启动检查才能看到登录页，见 `docs/upstream/web-env-check/`。
+> 依赖：网页端要先越过启动检查才能看到登录页，见 `docs/upstream/05-web-env-check/`。
 > 截图：同目录 `login-page-without-methods.png`（提交时上传到 issue）。拍摄于 2026-11-15，飞牛 fnOS 虚拟机，国际版，全新安装、未登录，已带启动检查的修复。
 
 **标题**：`feat(host): 独立 Host 的网页端支持首次登录与重新登录`

@@ -50,7 +50,7 @@
 |---|---|
 | 安装向导（应用中心「手动安装」界面） | 显示「选择 Cindy 版本」单选；选国际版后 `TRIM_PKGETC/region` 为 `global`，`/health` 的 `region=global` |
 | 登录页 | 未登录时首页转到 `/_fnos/login`，原版风格，国际版显示 Google、Apple 两个按钮 |
-| 中国大陆版 + 微信（0.1.1） | 微信授权成功，但 `cindy-host login` 失败：`authorization exchange returned no refresh token`（上游只接受 `ok` 结果，见 `docs/upstream/host-login-outcomes/`）；Host 自动重启 |
+| 中国大陆版 + 微信（0.1.1） | 微信授权成功，但 `cindy-host login` 失败：`authorization exchange returned no refresh token`（上游只接受 `ok` 结果，见 `docs/upstream/06-host-login-outcomes/`）；Host 自动重启 |
 | 国际版 + Apple（维护者操作） | **成功**：`login: finished (exit 0)`，Host 重启后 `account.authenticated=true`、`realm=global`、`runtime.state=ready`、`agents=["pi"]`；飞牛窗口内进入 Cindy 主界面 |
 | 取消登录 | Host 自动重启，回到未登录状态 |
 

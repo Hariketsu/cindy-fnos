@@ -2,7 +2,7 @@
 
 > 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/issues/10601
 > 模板：`.github/ISSUE_TEMPLATE/feature_request.yml`（功能建议）。
-> 依赖：网页端要先越过启动检查才能看到登录页，见 `docs/upstream/web-env-check/`。
+> 依赖：网页端要先越过启动检查才能看到登录页，见 `docs/upstream/05-web-env-check/`。
 
 **标题**：`feat(host): 独立 Host 支持不登录 Cindy 账号使用（本地模式）`
 

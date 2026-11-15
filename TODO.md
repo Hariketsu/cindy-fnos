@@ -52,7 +52,7 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 | 从文件读取凭据密钥 | `0003` | [#10417](https://github.com/makecindy/cindy/issues/10417) | [#10429](https://github.com/makecindy/cindy/pull/10429) | 触发维护者确认门（[#10437](https://github.com/makecindy/cindy/issues/10437)）；已按分析补 Windows 跳过（`813f482`）并回复，等待维护者 Approve。`813f482` 的 CI 中 Windows 分片 8/8 因无关用例（`maker-remote-ssh` 的 Git Bash 超时）偶发失败，已回复请维护者重跑（2026-11-15） |
 | Host 发行包缺 semver／picomatch | `0005` | [#10587](https://github.com/makecindy/cindy/issues/10587) | [#10589](https://github.com/makecindy/cindy/pull/10589) | 等待审查；分诊机器人在 #10587 建议采纳此修法。上游 main 的 Host 发行包启动即崩，`0005` 临时补上 |
 | 网页端启动检查要求 Claude Code+Codex | `0006` | [#10597](https://github.com/makecindy/cindy/issues/10597) | [#10598](https://github.com/makecindy/cindy/pull/10598) | 已提交（2026-11-15）；只打包 Pi 时网页端卡在「环境初始化失败」 |
-| Web 子路径部署 | `0004` | [#10614](https://github.com/makecindy/cindy/issues/10614) | 分支 `feat/web-base-path` | 分诊机器人欢迎提 PR；已按建议加同源路径校验，`0004` 改由该分支导出。PR 草稿 `docs/upstream/web-base-path/pr.md` 待审阅，手工验证待 VM 实测（与 P1 验收同一次安装） |
+| Web 子路径部署 | `0004` | [#10614](https://github.com/makecindy/cindy/issues/10614) | 分支 `feat/web-base-path` | 分诊机器人欢迎提 PR；已按建议加同源路径校验，`0004` 改由该分支导出。PR 草稿 `docs/upstream/09-web-base-path/pr.md` 待审阅，手工验证待 VM 实测（与 P1 验收同一次安装） |
 | Web 首次登录 API | — | [#10600](https://github.com/makecindy/cindy/issues/10600) | — | 已提交；过渡方案：Adapter 包装 CLI（国际版 Apple 已走通） |
 | Host 登录结果非 ok 时失败 | — | [#10599](https://github.com/makecindy/cindy/issues/10599) | — | 已提交；中国大陆版微信登录因此失败 |
 | Host 手机号／邮箱登录 | — | 并入 [#10600](https://github.com/makecindy/cindy/issues/10600) | — | cn 提供手机号、微信、Apple，global 提供邮箱、Apple、Google（`/api/auth/providers`）；`cindy-host login` 只支持社交登录，已在 #10600 中提出 |
@@ -61,7 +61,7 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 | 模型选择器崩溃（`modelGroups.get` 返回 null） | `0008` | [#10641](https://github.com/makecindy/cindy/issues/10641) | [#10643](https://github.com/makecindy/cindy/pull/10643) | 已提交（2026-11-15）；shim 的读方法兜底返回 `null`，打开选择器即「界面出错了」 |
 | 网页端添加自带 Key 的供应商 | — | 未提 | — | 查重无结果。上游 `docs/host/headless-runtime-plan.md` 把「供应商连接」列为 Host 必须完成的项，`channel-coverage.md` 中 `maker:provider:custom:*` 归为后台处理、尚未接入；Host 已能读取自定义供应商与加密凭据，缺写入接口。是否提功能建议待用户决定 |
 
-流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<主题>/`，经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的 `fnos-integration` 分支按补丁编号依次叠加 #10419（`0002`）、#10429（`0003`）、`feat/web-base-path`（`0004`）、#10589（`0005`）、#10598（`0006`）、#10642（`0007`）、#10643（`0008`）后逐段导出，必须与 PR 代码一致。
+流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<序号>-<主题>/`（已合入或关闭的移到 `archive/`），经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的 `fnos-integration` 分支按补丁编号依次叠加 #10419（`0002`）、#10429（`0003`）、`feat/web-base-path`（`0004`）、#10589（`0005`）、#10598（`0006`）、#10642（`0007`）、#10643（`0008`）后逐段导出，必须与 PR 代码一致。
 
 ## 暂缓的决定
 
