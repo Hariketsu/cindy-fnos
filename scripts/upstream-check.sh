@@ -31,6 +31,9 @@ CMD=$(printf '%q ' "$@")
 
 orb -m "$MACHINE" bash -lc "set -euo pipefail
 export PATH=\$HOME/.local/node/bin:\$PATH
+# pnpm 11 checks dependencies before every run/exec and would reinstall every
+# platform from pnpm-workspace.yaml, undoing install --os/--cpu below.
+export pnpm_config_verify_deps_before_run=false
 step() { local label=\$1 start; shift; start=\$(date +%s%N); \"\$@\"; echo \"[upstream-check] \$label \$(( (\$(date +%s%N) - start) / 1000000 )) ms\" >&2; }
 
 [[ -d \$HOME/cindy/.git ]] || { echo 'no ~/cindy on $MACHINE; run scripts/build-host.sh once first' >&2; exit 1; }
@@ -50,9 +53,11 @@ git clean -qfd
 [[ \$(git rev-parse HEAD) == $SHA ]] && git diff --quiet HEAD || { echo '[upstream-check] checkout does not match $SHA' >&2; exit 1; }
 step lfs git lfs pull --include='apps/desktop/native/sqlite-vec/linux-*'
 
-LOCK=\$(sha256sum pnpm-lock.yaml | cut -d' ' -f1)
+# Only this machine's native packages, as in build-host.sh.
+CPU=\$(node -p process.arch)
+LOCK=\"\$(sha256sum pnpm-lock.yaml | cut -d' ' -f1) linux-\$CPU\"
 if [[ \$(cat node_modules/.upstream-check-lock 2>/dev/null) != \$LOCK ]]; then
-  step install pnpm install --frozen-lockfile --config.confirmModulesPurge=false
+  step install pnpm install --frozen-lockfile --config.confirmModulesPurge=false --os=linux --cpu=\$CPU
   echo \$LOCK > node_modules/.upstream-check-lock
 fi
 

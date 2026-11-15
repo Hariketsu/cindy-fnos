@@ -54,6 +54,9 @@ if [[ ! -x \$HOME/.local/node/bin/node ]] || [[ \$(\$HOME/.local/node/bin/node -
   ln -sfn \$HOME/.local/node-v$NODE_VERSION-linux-$NODE_ARCH \$HOME/.local/node
 fi
 export PATH=\$HOME/.local/node/bin:\$PATH
+# pnpm 11 checks dependencies before every run/exec and would reinstall every
+# platform from pnpm-workspace.yaml, undoing install --os/--cpu below.
+export pnpm_config_verify_deps_before_run=false
 corepack enable --install-directory \$HOME/.local/node/bin
 corepack prepare pnpm@$PNPM_VERSION --activate >/dev/null
 
@@ -68,7 +71,10 @@ git clean -qfd apps/host/scripts
 for p in '$ROOT'/patches/*.patch; do [[ -e \$p ]] && git apply --index \"\$p\"; done
 git lfs pull --include='apps/desktop/native/sqlite-vec/linux-*'
 
-pnpm install --frozen-lockfile --config.confirmModulesPurge=false    # also downloads the agent harness binaries; no TTY to confirm a modules purge
+# Upstream installs the optional native packages of every desktop platform
+# (supportedArchitectures); this machine only needs its own (~2.3 GB by du it never uses).
+# The release copies none of them (node-pty's bundled prebuilds are unaffected).
+pnpm install --frozen-lockfile --config.confirmModulesPurge=false --os=linux --cpu=$NODE_ARCH    # also downloads the agent harness binaries; no TTY to confirm a modules purge
 CLI=\$(cd apps/host && node -p \"require('path').join(require('path').dirname(require.resolve('playwright-core/package.json')),'cli.js')\")
 node \"\$CLI\" install chromium   # Chromium bundled into the release
 pnpm --filter desktop exec vite build --config vite.renderer.config.ts ${WEB_BASE:+--base=$WEB_BASE}

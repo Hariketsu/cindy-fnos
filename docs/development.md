@@ -102,6 +102,8 @@ scripts/build-host.sh arm64     # 开发 VM 用；真机用 amd64
 
 - 用 Debian 12：飞牛基于 Debian 12（glibc 2.36），而产物里的原生模块是在构建机上编译的。
 - 首次运行时 `pnpm install` 要下载全部 harness，大约 20 分钟。
+- 只安装构建机自己平台的原生包：上游 `pnpm-workspace.yaml` 的 `supportedArchitectures` 会装上 Windows、macOS 和 x64 的可选包（约 2.3GB，按 `du` 估算），`build-host.sh` 与 `upstream-check.sh` 安装时加 `--os=linux --cpu=<本机架构>`。pnpm 11 在每次 `run`／`exec` 前会按 yaml 检查并重装依赖，两个脚本都设了 `pnpm_config_verify_deps_before_run=false`，否则这些包又会被装回来。2026-11-15 对比过：这样构建的 Host 产物与之前的文件清单一致（只有前端资源的哈希文件名随上游变化）。
+- `pnpm store prune` 按锁文件判断包是否还在使用，上游锁文件列着所有平台，所以已经装过的其他平台包会一直留在 pnpm 仓库里，prune 删不掉。
 - Host 构建需要 Playwright 的 Chromium，脚本用同版本的 `playwright-core` CLI 安装。
 - 不要把产物解压到存储空间或用户文件区来测试：前者 64KB 的簇会让占用膨胀到 24GB，后者没有可执行权限（见 [fnos-platform-notes.md](fnos-platform-notes.md)）。
 
@@ -116,7 +118,7 @@ scripts/upstream-check.sh <分支或 commit> bash -c 'cd apps/host && node --imp
 
 - 只测已提交的内容：先在 `.upstream/cindy` 提交（或 amend），工作区有未提交改动时脚本会提示。
 - commit 以 git 对象的形式传到构建机：构建机上的 `~/cindy-dev`（`~/cindy` 的 worktree，首次运行时自动创建，远端 `mac` 指向 Mac 上的 `.upstream/cindy`）拉取该 commit，确认 HEAD 等于这个 SHA 且没有改动后才运行命令。不要再用补丁文件经共享目录传改动：曾两次读到损坏的补丁，`git apply` 失败后测试照样跑在未打补丁的树上。
-- `~/cindy-dev` 与 `build-host.sh` 使用的 `~/cindy` 分开，构建时的强制重置不会影响测试。依赖从 pnpm 仓库硬链接，锁文件变化时才重新安装（首次约 9 秒，构建机多占约 0.5GB）。
+- `~/cindy-dev` 与 `build-host.sh` 使用的 `~/cindy` 分开，构建时的强制重置不会影响测试。锁文件变化时才重新安装（首次约 9 秒）。构建机的文件系统是 btrfs，pnpm 用写时复制克隆导入依赖，两份 `node_modules` 与 pnpm 仓库共用数据：`du` 每份显示约 5GB，实际新增约 1～2GB（`df` 前后对比）。估算占用要看 `df`，不要看 `du`。
 - 每一步（fetch、lfs、install、run）都打印耗时。Host 的类型检查要加大内存，否则会退出（134）：`scripts/upstream-check.sh <ref> env NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @cindy/host run typecheck`。
 
 ### 打包 fpk 并装进 VM
