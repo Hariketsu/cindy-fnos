@@ -51,13 +51,13 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 | 从文件读取凭据密钥 | `0003` | [#10417](https://github.com/makecindy/cindy/issues/10417) | [#10429](https://github.com/makecindy/cindy/pull/10429) | 触发维护者确认门（[#10437](https://github.com/makecindy/cindy/issues/10437)）；已按分析补 Windows 跳过（`813f482`）并回复，等待维护者 Approve。`813f482` 的 CI 中 Windows 分片 8/8 因无关用例（`maker-remote-ssh` 的 Git Bash 超时）偶发失败，已回复请维护者重跑（2026-11-15） |
 | Host 发行包缺 semver／picomatch | `0005` | [#10587](https://github.com/makecindy/cindy/issues/10587) | [#10589](https://github.com/makecindy/cindy/pull/10589) | 等待审查；分诊机器人在 #10587 建议采纳此修法。上游 main 的 Host 发行包启动即崩，`0005` 临时补上 |
 | 网页端启动检查要求 Claude Code+Codex | `0006` | [#10597](https://github.com/makecindy/cindy/issues/10597) | [#10598](https://github.com/makecindy/cindy/pull/10598) | 已提交（2026-11-15）；只打包 Pi 时网页端卡在「环境初始化失败」 |
-| Web 子路径部署 | `0004` | [#10614](https://github.com/makecindy/cindy/issues/10614) | — | 已提交（2026-11-15）；等维护者确认方向后再开 PR 分支 |
+| Web 子路径部署 | `0004` | [#10614](https://github.com/makecindy/cindy/issues/10614) | 分支 `feat/web-base-path` | 分诊机器人欢迎提 PR；已按建议加同源路径校验，`0004` 改由该分支导出。PR 草稿 `docs/upstream/web-base-path/pr.md` 待审阅，手工验证待 VM 实测（与 P1 验收同一次安装） |
 | Web 首次登录 API | — | [#10600](https://github.com/makecindy/cindy/issues/10600) | — | 已提交；过渡方案：Adapter 包装 CLI（国际版 Apple 已走通） |
 | Host 登录结果非 ok 时失败 | — | [#10599](https://github.com/makecindy/cindy/issues/10599) | — | 已提交；中国大陆版微信登录因此失败 |
 | Host 手机号／邮箱登录 | — | 并入 [#10600](https://github.com/makecindy/cindy/issues/10600) | — | cn 提供手机号、微信、Apple，global 提供邮箱、Apple、Google（`/api/auth/providers`）；`cindy-host login` 只支持社交登录，已在 #10600 中提出 |
 | Host 本地模式（无账号） | — | [#10601](https://github.com/makecindy/cindy/issues/10601) | — | 已提交；网页端「跳过登录」无效 |
 
-流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<主题>/`，经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的 `fnos-integration` 分支依次叠加 #10419、#10429、#10589、#10598 后导出（`0004` 只在本仓库维护），必须与 PR 代码一致。
+流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<主题>/`，经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的 `fnos-integration` 分支按补丁编号依次叠加 #10419（`0002`）、#10429（`0003`）、`feat/web-base-path`（`0004`）、#10589（`0005`）、#10598（`0006`）后逐段导出，必须与 PR 代码一致。
 
 ## 暂缓的决定
 

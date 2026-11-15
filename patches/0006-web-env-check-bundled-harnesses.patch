@@ -8,7 +8,7 @@ Upstream: issue https://github.com/makecindy/cindy/issues/10597, PR https://gith
 Remove when: upstream's web startup check accepts a release without Claude
 Code and Codex.
 diff --git a/apps/host/src/web-shim.test.mjs b/apps/host/src/web-shim.test.mjs
-index 6526127482..8e4188a2c1 100644
+index 4037bc8186..8a01f91811 100644
 --- a/apps/host/src/web-shim.test.mjs
 +++ b/apps/host/src/web-shim.test.mjs
 @@ -43,7 +43,7 @@ function browser(respond = () => ({}), script = source, openEvents = (_url, { si
@@ -43,10 +43,10 @@ index 6526127482..8e4188a2c1 100644
    const b = browser(() => ({ isAuthenticated: true }));
    await b.api.auth.getState();
 diff --git a/apps/web/shim.js b/apps/web/shim.js
-index f064ed0e69..0ca2a94fbb 100644
+index 1f5a93aa78..89651d0e13 100644
 --- a/apps/web/shim.js
 +++ b/apps/web/shim.js
-@@ -512,7 +512,8 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
+@@ -525,7 +525,8 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
      'checkEnvironment': () => {
        const harness = window.__cindyBoot?.harness ?? {};
        const entry = (ready) => (ready ? { status: 'passed' } : { status: 'failed', error: 'not installed' });
