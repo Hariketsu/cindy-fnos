@@ -70,7 +70,7 @@ FNOS_VM_PASSWORD=...
 
 开发 VM 只保留一个 **btrfs** 存储空间（`/vol2`，volume-id 2）。日常开发都装在这里。
 
-最初还有一个 ext4 存储空间（64KB 簇）。它让 Host 产物膨胀到 24GB，严重拖慢迭代，已于 2026-11-13 删除。ext4 上的占用改用估算：`文件数 × 64KB 向上取整`。按这个方法估算原始产物约 20GB，和实测的 24GB 基本吻合，差额是目录本身占用的簇。
+不要建 ext4 存储空间：飞牛的 ext4 存储空间簇大小是 64KB，每个文件至少占 64KB，Host 产物文件多，会膨胀到二十多 GB（实测见 [fnos-platform-notes.md](fnos-platform-notes.md)）。需要估算 ext4 上的占用时，用 `文件数 × 64KB 向上取整`。
 
 SSH 到 VM：`scripts/dev-vm/vm-ssh.sh '<命令>'`，传文件：`scripts/dev-vm/vm-ssh.sh --scp <本地文件> <远端路径>`（读取 `.env.local` 中的密码）。
 
@@ -148,12 +148,12 @@ F app install-fpk build/fpk/cindy-<版本>-arm64.fpk --volume-id 2 \
 | OrbStack 构建机（依赖与 harness 缓存，含测试用的 `~/cindy-dev`） | 约 11GB |
 | Host 产物压缩包 | 约 0.8GB／每个架构 |
 
-- **VM 的磁盘文件只会增长，不会自动缩小。** 在 VM 里删除大量文件后，要执行 `sudo fstrim -av`，把空闲块还给 Mac（UTM 已启用 discard）。2026-11-13 曾因往存储空间解压 Host 产物，把 VM 撑到 35GB，fstrim 之后回到 6.9GB。
+- **VM 的磁盘文件只会增长，不会自动缩小。** 在 VM 里删除大量文件后，要执行 `sudo fstrim -av`，把空闲块还给 Mac（UTM 已启用 discard）。
 - `scripts/build-host.sh` 在可用空间少于 10GB 时会拒绝运行。
 
 ### 干净基线
 
-初始化完成后关机，在 UTM 中克隆一份基线。当前基线是 `fnOS-baseline-btrfs`（2026-11-13，只有 btrfs 存储空间、没有第三方应用）。
+初始化完成后关机，在 UTM 中克隆一份基线（例如 `fnOS-baseline-btrfs`）。基线只保留 btrfs 存储空间，不装第三方应用。
 
 UTM 的界面没有快照功能，所以「基线」就是用克隆得到的一台独立 VM。平时**不要开机**。需要在干净设备上验收时，右键基线选「运行时不保存更改」，关机后所有改动都会丢弃；也可以从基线再克隆一台临时 VM，用完删掉。APFS 上的克隆是写时复制，只有改动过的部分才占新空间。每次阶段验收前，从基线克隆出新的 VM 来测试。
 
