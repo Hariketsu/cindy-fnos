@@ -1,6 +1,6 @@
 # PR 草稿：CLI 登录结果不是 ok 时说明缺哪一步
 
-> 状态：已经用户审阅，2026-11-15 提交为 https://github.com/makecindy/cindy/pull/10704
+> 状态：已经用户审阅，2026-11-15 提交为 https://github.com/makecindy/cindy/pull/10704 ；2026-11-16 合入（`a3028c0`）
 > 关联 issue：https://github.com/makecindy/cindy/issues/10599 （分诊回复给出的修法与本 PR 一致）
 > 分支：本地 `.upstream/cindy` 中的 `fix/host-login-outcomes`，基于上游 `main`（`961954be9c`），1 个 commit（`4a40115fda`），带 DCO 签名。
 > 与 fnOS 适配的关系：Adapter 的登录页已经提示「先在 Cindy 桌面版用同一方式登录并完成设置」；本 PR 合入后，CLI 自己就能给出准确原因。只改 Host，不需要本地补丁过渡。

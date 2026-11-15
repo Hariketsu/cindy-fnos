@@ -27,7 +27,7 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 
 其他未决：
 
-- [ ] Host 登录遇到「需绑定手机号／选择账号」时失败（`no refresh token`）：登录页已提示用户先在 Cindy 桌面版用同一方式登录并完成设置；上游 [#10599](https://github.com/makecindy/cindy/issues/10599)
+- [ ] Host 登录遇到「需绑定手机号／选择账号」时失败（`no refresh token`）：登录页已提示用户先在 Cindy 桌面版用同一方式登录并完成设置。上游 [#10704](https://github.com/makecindy/cindy/pull/10704) 已让 CLI 报错说明缺哪一步（待 `upstream.lock` 前移）；在网页上完成绑定要靠 [#10600](https://github.com/makecindy/cindy/issues/10600)
 - [ ] 升级路径：`fnos-cli app install-fpk` 对已安装应用报 10236「应用已存在」；应用中心「手动安装」升级需要人工在界面上试一次（见平台笔记）
 - [ ] 非管理员账号能否读取应用目录里的 600 文件（管理员可以，见平台笔记 `trimacl`）
 
@@ -48,15 +48,15 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 | 事项 | 本地补丁 | Issue | PR | 状态 |
 |---|---|---|---|---|
 | 构建时可选 harness | 已删除 | [#10404](https://github.com/makecindy/cindy/issues/10404) | [#10418](https://github.com/makecindy/cindy/pull/10418) | **已合入**（2026-11-13，`a54e488`）；`upstream.lock` 已移到 `b975dc3`，补丁已删除 |
-| 依赖复制去重 | `0002` | [#10406](https://github.com/makecindy/cindy/issues/10406) | [#10419](https://github.com/makecindy/cindy/pull/10419) | #10418 合入后冲突，已变基到 `b975dc3` 并重新验证、回复（2026-11-15），等待复审；在 `ae78647` 上 cherry-pick 无冲突 |
-| 从文件读取凭据密钥 | `0003` | [#10417](https://github.com/makecindy/cindy/issues/10417) | [#10429](https://github.com/makecindy/cindy/pull/10429) | 触发维护者确认门（[#10437](https://github.com/makecindy/cindy/issues/10437)）；已按分析补 Windows 跳过（`813f482`）并回复，等待维护者 Approve。`813f482` 的 CI 中 Windows 分片 8/8 因无关用例（`maker-remote-ssh` 的 Git Bash 超时）偶发失败，已回复请维护者重跑（2026-11-15） |
+| 依赖复制去重 | `0002` | [#10406](https://github.com/makecindy/cindy/issues/10406) | [#10419](https://github.com/makecindy/cindy/pull/10419) | 曾卡在未 Resolve 的审查讨论（Greptile 的 P1，我们已回复修法但没点 Resolve）；2026-11-16 已 Resolve，等下一轮自动审查。在 `ae78647` 上 cherry-pick 无冲突 |
+| 从文件读取凭据密钥 | `0003` | [#10417](https://github.com/makecindy/cindy/issues/10417) | [#10429](https://github.com/makecindy/cindy/pull/10429) | 触发维护者确认门（[#10437](https://github.com/makecindy/cindy/issues/10437)，标签 `awaiting-discussion`），等待维护者 Approve。Greptile 指出 Windows 测试失败的那条讨论，2026-11-16 已在讨论下回复 `813f482` 的修法并 Resolve。Windows CI 分片 8/8 仍为失败（无关的 Git Bash 超时），重跑请求无人回应 |
 | Host 发行包缺 semver／picomatch | 已删除 | [#10587](https://github.com/makecindy/cindy/issues/10587) | [#10589](https://github.com/makecindy/cindy/pull/10589) | **已合入**（2026-11-15，`e1f4b6a`） |
 | 网页端启动检查要求 Claude Code+Codex | 已删除 | [#10597](https://github.com/makecindy/cindy/issues/10597) | [#10598](https://github.com/makecindy/cindy/pull/10598) | **已合入**（2026-11-15，`6b0baae`） |
 | Web 子路径部署 | `0004` | [#10614](https://github.com/makecindy/cindy/issues/10614) | 分支 `feat/web-base-path` | 分诊机器人欢迎提 PR；已按建议加同源路径校验，`0004` 改由该分支导出。PR 草稿 `docs/upstream/09-web-base-path/pr.md` 待审阅，手工验证待 VM 实测（与 P1 验收同一次安装） |
 | Web 首次登录 API | — | [#10600](https://github.com/makecindy/cindy/issues/10600) | — | 已提交；过渡方案：Adapter 包装 CLI（国际版 Apple 已走通） |
-| Host 登录结果非 ok 时失败 | — | [#10599](https://github.com/makecindy/cindy/issues/10599) | [#10704](https://github.com/makecindy/cindy/pull/10704) | 已提交（2026-11-15），按分诊给出的修法实现，只改 Host，不需要本地补丁；Host 509 项测试与类型检查通过。修好后报错更准确，但微信未绑定手机号的账号仍需先在桌面版完成绑定 |
+| Host 登录结果非 ok 时失败 | — | [#10599](https://github.com/makecindy/cindy/issues/10599) | [#10704](https://github.com/makecindy/cindy/pull/10704) | **已合入**（2026-11-16，`a3028c0`）；只改 Host，没有本地补丁。`upstream.lock` 前移过 `a3028c0` 后，CLI 报错才会说明缺哪一步；微信未绑定手机号的账号仍需先在桌面版完成绑定 |
 | Host 手机号／邮箱登录 | — | 并入 [#10600](https://github.com/makecindy/cindy/issues/10600) | — | cn 提供手机号、微信、Apple，global 提供邮箱、Apple、Google（`/api/auth/providers`）；`cindy-host login` 只支持社交登录，已在 #10600 中提出 |
-| Host 本地模式（无账号） | — | [#10601](https://github.com/makecindy/cindy/issues/10601) | — | 已提交；网页端「跳过登录」无效 |
+| Host 本地模式（无账号） | — | [#10601](https://github.com/makecindy/cindy/issues/10601) | — | 已提交；网页端「跳过登录」无效。分诊建议第一步让入口明确不可用；**暂缓**（2026-11-16）：只改 shim 时 Renderer 会吞掉错误，用户仍看不到提示，要改登录页 UI；飞牛版未登录时先进 Adapter 登录页，用户一般看不到这个按钮 |
 | 只打包部分 agent 时模型目录失败 | 已删除 | [#10640](https://github.com/makecindy/cindy/issues/10640) | [#10642](https://github.com/makecindy/cindy/pull/10642) | **已合入**（2026-11-15，`ae78647`）；`upstream.lock` 已移到 `ae78647`。PR 的手工验证未补，合入前未要求 |
 | 模型选择器崩溃（`modelGroups.get` 返回 null） | 已删除 | [#10641](https://github.com/makecindy/cindy/issues/10641) | [#10643](https://github.com/makecindy/cindy/pull/10643) | **已合入**（2026-11-15，`dcecfa5`） |
 | 网页端添加自带 Key 的供应商 | — | [#10644](https://github.com/makecindy/cindy/issues/10644) | — | 已提交功能建议（2026-11-15）；分诊认可方向、欢迎我们提 PR，列出的完成条件是 fnOS 上用 DeepSeek 预设完成添加、拉取模型并流式对话。查重无结果。上游 `docs/host/headless-runtime-plan.md` 把「供应商连接」列为 Host 必须完成的项，`channel-coverage.md` 中 `maker:provider:custom:*` 归为后台处理、尚未接入；Host 已能读取自定义供应商与加密凭据，缺写入接口 |
