@@ -17,7 +17,7 @@
 1. [x] **集成构建并装进 VM**（2026-11-15）：fpk 装进 volume 2，飞牛桌面两个入口都打开原版界面（未登录状态），请求全部留在前缀内，见 [证据](docs/evidence/2026-11-15-p1-integration-install.md)
 2. [x] **网页首次登录**（2026-11-15）：安装向导选择版本（中国大陆版：微信；国际版：Google、Apple）；Adapter 的 `/_fnos/login`（原版风格）运行 `cmd/main host-login <方式>`（停 Host → `cindy-host login --no-open` → 重启 Host），`/connect` 也转到登录页。国际版 Apple 登录成功进入主界面，见 [证据](docs/evidence/2026-11-15-p1-integration-install.md)；中国大陆版微信登录受上游限制失败（见「上游事项」）
 3. [ ] **P1 验收**：VM 已重装为 fpk 0.1.3 国际版并用 Apple 登录（2026-11-15）。已走通：用 Cindy AI 的 GLM 5.3 Flash 发送真实任务，Pi 执行 shell 命令、流式回复正常，页面 50 个请求全部在 `/app/cindy/` 前缀内。待做：停止、权限确认 → 重启 VM 后保持登录 → 升级 → 卸载；另在 ext4 估算占用。VM 上的 0.1.3 临时手改了 renderer 与 shim（对应上游 #10642、#10643，已合入 `ae78647`）和 `cmd/main`（PATH），下次用基于 `ae78647` 的新 fpk 重装后才是正式状态。`upstream.lock` 前移到 `ae78647` 后（2026-11-15）只验证了补丁能按顺序应用，尚未在构建机上构建 Host、跑测试
-4. [ ] **自带 API Key 的供应商（DeepSeek）**：网页端「添加供应商」能列出 DeepSeek 预设，但保存调用的 `maker.createCustomProvider` 在 Host 与 shim 中都未实现，暂时只能用 Cindy 账号内置的模型（含 Cindy AI 提供的 DeepSeek V4）。已提功能建议 [#10644](https://github.com/makecindy/cindy/issues/10644)，分诊已认可方向并欢迎提 PR，实现路线待讨论
+4. [ ] **自带 API Key 的供应商（DeepSeek）**：网页端「添加供应商」能列出 DeepSeek 预设，但保存调用的 `maker.createCustomProvider` 在 Host 与 shim 中都未实现，暂时只能用 Cindy 账号内置的模型（含 Cindy AI 提供的 DeepSeek V4）。已提功能建议 [#10644](https://github.com/makecindy/cindy/issues/10644)，分诊已认可方向并欢迎提 PR；选定 C 路线：先在 issue 下问维护者写通道走契约通道还是通用 IPC 通道，评论草稿 `docs/upstream/12-host-custom-providers/route-question.md` 待审阅
 
 Adapter 集成时要验证 / 加固（子代理 A 提出）：
 
