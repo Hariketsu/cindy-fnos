@@ -105,6 +105,20 @@ scripts/build-host.sh arm64     # 开发 VM 用；真机用 amd64
 - Host 构建需要 Playwright 的 Chromium，脚本用同版本的 `playwright-core` CLI 安装。
 - 不要把产物解压到存储空间或用户文件区来测试：前者 64KB 的簇会让占用膨胀到 24GB，后者没有可执行权限（见 [fnos-platform-notes.md](fnos-platform-notes.md)）。
 
+### 在构建机上测试上游分支
+
+给上游写 PR 时，分支在 Mac 的 `.upstream/cindy` 中，依赖装在构建机上。用 `scripts/upstream-check.sh` 在构建机上对某个 commit 跑命令：
+
+```bash
+scripts/upstream-check.sh <分支或 commit> pnpm --filter @cindy/host test     # 已有构建机时加 CINDY_BUILD_MACHINE=<名字>
+scripts/upstream-check.sh <分支或 commit> bash -c 'cd apps/host && node --import tsx --import ./src/loaders/register-raw.mjs --test src/auth/login.test.mjs'
+```
+
+- 只测已提交的内容：先在 `.upstream/cindy` 提交（或 amend），工作区有未提交改动时脚本会提示。
+- commit 以 git 对象的形式传到构建机：构建机上的 `~/cindy-dev`（`~/cindy` 的 worktree，首次运行时自动创建，远端 `mac` 指向 Mac 上的 `.upstream/cindy`）拉取该 commit，确认 HEAD 等于这个 SHA 且没有改动后才运行命令。不要再用补丁文件经共享目录传改动：曾两次读到损坏的补丁，`git apply` 失败后测试照样跑在未打补丁的树上。
+- `~/cindy-dev` 与 `build-host.sh` 使用的 `~/cindy` 分开，构建时的强制重置不会影响测试。依赖从 pnpm 仓库硬链接，锁文件变化时才重新安装（首次约 9 秒，构建机多占约 0.5GB）。
+- 每一步（fetch、lfs、install、run）都打印耗时。Host 的类型检查要加大内存，否则会退出（134）：`scripts/upstream-check.sh <ref> env NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @cindy/host run typecheck`。
+
 ### 打包 fpk 并装进 VM
 
 飞牛经网关把应用放在 `/app/cindy/` 下，打包用的 Host 必须带上这个前缀构建：
