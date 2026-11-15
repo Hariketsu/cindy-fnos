@@ -9,7 +9,7 @@ Upstream: issue https://github.com/makecindy/cindy/issues/10406, PR https://gith
 Remove when: the PR is merged and upstream.lock moves past it.
 
 diff --git a/apps/host/scripts/build.mjs b/apps/host/scripts/build.mjs
-index 6cfb583788..9c06e2aa42 100644
+index d675ac428f..0aa2a1d0b0 100644
 --- a/apps/host/scripts/build.mjs
 +++ b/apps/host/scripts/build.mjs
 @@ -14,6 +14,7 @@ import { build } from 'esbuild';
@@ -20,7 +20,7 @@ index 6cfb583788..9c06e2aa42 100644
  
  const repo = fileURLToPath(new URL('../../..', import.meta.url));
  const host = path.join(repo, 'apps/host');
-@@ -248,6 +249,12 @@ try {
+@@ -252,6 +253,12 @@ try {
      ancestors.delete(name);
      await copyPackage(source, staging, ancestors);
    }

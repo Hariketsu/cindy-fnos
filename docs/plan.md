@@ -1,6 +1,6 @@
 # 适配计划
 
-> 最近更新：2026-11-15 · 上游基线：`makecindy/cindy@b975dc3`
+> 最近更新：2026-11-15 · 上游基线：`makecindy/cindy@ae78647`
 >
 > 本文记录**做什么、按什么顺序做、每一步怎样才算完成**。系统如何工作见 [architecture.md](architecture.md)，
 > 开发与验证环境见 [development.md](development.md)，当前进度见根目录 [TODO.md](../TODO.md)。
@@ -35,11 +35,11 @@
 |---|---|---|
 | 子路径部署 | Shim 写死根路径（`/api`、`/events`、`/chat`、`/connect`） | 可配置 base path（Renderer 资源用 `vite build --base` 解决）；[#10614](https://github.com/makecindy/cindy/issues/10614)，PR 待提 |
 | 无 Secret Service 的凭据 | Linux 只能用 `secret-tool` | 从文件注入密钥；[#10429](https://github.com/makecindy/cindy/pull/10429) 等维护者确认 |
-| 可选 harness | 已合入（[#10418](https://github.com/makecindy/cindy/pull/10418)） | 只打包部分 Agent 后的连带问题：启动检查（[#10598](https://github.com/makecindy/cindy/pull/10598)）、模型目录（[#10642](https://github.com/makecindy/cindy/pull/10642)） |
-| Host 发行包可启动 | 缺 `semver`、`picomatch`，启动即崩 | [#10589](https://github.com/makecindy/cindy/pull/10589) |
+| 可选 harness | 已合入（[#10418](https://github.com/makecindy/cindy/pull/10418)），连带的启动检查（[#10598](https://github.com/makecindy/cindy/pull/10598)）、模型目录（[#10642](https://github.com/makecindy/cindy/pull/10642)）也已合入 | — |
+| Host 发行包可启动 | 已合入（[#10589](https://github.com/makecindy/cindy/pull/10589)） | — |
 | Web 首次登录 | 只能用 `cindy-host login` CLI，且只支持社交登录 | 浏览器内登录 API（[#10600](https://github.com/makecindy/cindy/issues/10600)）；在此之前由 Adapter 包装 CLI。中国大陆版微信登录另受 [#10599](https://github.com/makecindy/cindy/issues/10599) 影响 |
-| 网页端模型选择器 | 打开即崩溃（`modelGroups.get` 被兜底成 `null`） | [#10643](https://github.com/makecindy/cindy/pull/10643) |
-| 自定义模型供应商 | 网页端无法保存（Host 无写入接口） | [#10644](https://github.com/makecindy/cindy/issues/10644)，等维护者确认方向 |
+| 网页端模型选择器 | 已合入（[#10643](https://github.com/makecindy/cindy/pull/10643)） | — |
+| 自定义模型供应商 | 网页端无法保存（Host 无写入接口） | [#10644](https://github.com/makecindy/cindy/issues/10644)，分诊已认可方向、欢迎提 PR，实现路线待定 |
 | Host 本地模式（无账号） | Host 拒绝在无账号时启动 Runtime | [#10601](https://github.com/makecindy/cindy/issues/10601)，作为后续可选能力 |
 
 `X-Frame-Options`、Host 头校验这类问题由 Adapter 的反向代理处理（这是反向代理的正常职责），不需要上游改动。

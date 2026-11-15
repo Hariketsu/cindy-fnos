@@ -4,7 +4,7 @@
 > 关联 issue：makecindy/cindy#10614（分诊机器人已建议推进并欢迎提交 PR）
 > 分支：本地 `.upstream/cindy` 中的 `feat/web-base-path`，基于上游 `main`（`b975dc3`），1 个 commit，带 DCO 签名。
 > 模板：上游 `.github/PULL_REQUEST_TEMPLATE.md`
-> 本地补丁 `patches/0004-web-base-path.patch` 由这个分支导出（集成分支 `fnos-integration` 按 0002→0006 叠加）。
+> 本地补丁 `patches/0004-web-base-path.patch` 由这个分支导出（集成分支 `fnos-integration` 基于 `ae78647`，按 0002→0004 叠加）。
 > 与 #10598 的关系：两者都改 `shim.js` 和 `web-shim.test.mjs`，但改动位置不重叠，按任意顺序叠加都没有冲突（已在集成分支上验证）。
 > 验证数据均为实测（2026-11-15，linux-arm64，Debian 12，Node 22.22.3，pnpm 11.28.9）。
 

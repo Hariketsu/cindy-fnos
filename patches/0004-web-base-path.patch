@@ -14,7 +14,7 @@ submitted (branch feat/web-base-path).
 Remove when: upstream web shim supports a path prefix (by this or another
 mechanism) without this patch.
 diff --git a/apps/host/src/web-shim.test.mjs b/apps/host/src/web-shim.test.mjs
-index 6526127482..4037bc8186 100644
+index 1024fd4645..31aa84c568 100644
 --- a/apps/host/src/web-shim.test.mjs
 +++ b/apps/host/src/web-shim.test.mjs
 @@ -31,7 +31,7 @@ function browser(respond = () => ({}), script = source, openEvents = (_url, { si
@@ -26,7 +26,7 @@ index 6526127482..4037bc8186 100644
        const body = JSON.parse(options.body);
        calls.push({ url, body, credentials: options.credentials });
        const result = await respond(url, body);
-@@ -69,6 +69,35 @@ test('both auth API shapes use the same Host routes', async () => {
+@@ -84,6 +84,35 @@ test('both auth API shapes use the same Host routes', async () => {
    assert.ok(b.calls.every(c => c.credentials === 'same-origin'));
  });
  
@@ -63,7 +63,7 @@ index 6526127482..4037bc8186 100644
    const b = browser(() => ({ granted: true, handled: true }));
    assert.equal((await b.api.ghosts.requestTaskApproval('demo', 'host-tools:terminal')).granted, true);
 diff --git a/apps/web/shim.js b/apps/web/shim.js
-index f064ed0e69..1f5a93aa78 100644
+index a77af345ea..b344ebe96b 100644
 --- a/apps/web/shim.js
 +++ b/apps/web/shim.js
 @@ -76,6 +76,19 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
@@ -104,7 +104,7 @@ index f064ed0e69..1f5a93aa78 100644
          method: 'POST',
          headers,
          body: JSON.stringify(body),
-@@ -730,7 +743,7 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
+@@ -735,7 +748,7 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
      'authSwitchAccount': () => unsupported('authSwitchAccount'),
      'authBeginAddAccount': () => ({ success: false, code: 'NOT_SUPPORTED', state: null }),
      'authCancelAddAccount': () => undefined,
@@ -113,7 +113,7 @@ index f064ed0e69..1f5a93aa78 100644
      'authGetAccountDeletionAvailability': () => ({ success: true, value: { available: false, reason: 'not_supported' } }),
      'authRequestAccountDeletionChallenge': () => ({ success: false, code: 'NOT_SUPPORTED' }),
      'authConfirmAccountDeletion': () => ({ success: false, code: 'NOT_SUPPORTED' }),
-@@ -1009,7 +1022,7 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
+@@ -1014,7 +1027,7 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
      if (eventConnection) return;
      eventConnection = startHostEventStream({
        confirmations: true,

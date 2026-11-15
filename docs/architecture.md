@@ -57,8 +57,8 @@ flowchart TB
 
 | 组件 | 来源 | 职责 | 状态 |
 |---|---|---|---|
-| Renderer | 上游 `apps/desktop/src/renderer`，界面代码不改；`patches/0007` 让模型目录只读取已注册 Agent 的能力 | 全部界面与交互；构建时 `vite build --base /app/cindy/` | 已实现 |
-| Web shim | 上游 `apps/web/shim.js` + `patches/0004`、`0006`、`0008` | 在浏览器中提供 `window.electronAPI`，转发到 Host；`0004` 让请求带上子路径前缀，`0006` 让只打包 Pi 时通过启动检查，`0008` 避免模型选择器崩溃 | 已实现 |
+| Renderer | 上游 `apps/desktop/src/renderer`，界面代码不改 | 全部界面与交互；构建时 `vite build --base /app/cindy/` | 已实现 |
+| Web shim | 上游 `apps/web/shim.js` + `patches/0004` | 在浏览器中提供 `window.electronAPI`，转发到 Host；`0004` 让请求带上子路径前缀 | 已实现 |
 | Cindy Host | 上游 `apps/host` + `patches/` | Agent Runtime（只打包 Pi）、任务与消息、凭据、数据库、Chromium | 已实现 |
 | fnOS Adapter | 本项目 `adapter/` | 飞牛网关与 Host 之间的身份、路由与安全边界；Cindy 之外的页面（登录、未就绪、错误） | 已实现 |
 | `cmd/main` | 本项目 `fpk/cmd/main` | 启停 Host 与 Adapter、设置 `PATH`（飞牛启动脚本时可能不带）、生成凭据密钥、按版本确定登录方式、编排网页登录 | 已实现 |
