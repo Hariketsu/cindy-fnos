@@ -102,8 +102,8 @@ scripts/build-host.sh arm64     # 开发 VM 用；真机用 amd64
 
 - 用 Debian 12：飞牛基于 Debian 12（glibc 2.36），而产物里的原生模块是在构建机上编译的。
 - 首次运行时 `pnpm install` 要下载全部 harness，大约 20 分钟。
-- 只安装构建机自己平台的原生包：上游 `pnpm-workspace.yaml` 的 `supportedArchitectures` 会装上 Windows、macOS 和 x64 的可选包（约 2.3GB，按 `du` 估算），`build-host.sh` 与 `upstream-check.sh` 安装时加 `--os=linux --cpu=<本机架构>`。pnpm 11 在每次 `run`／`exec` 前会按 yaml 检查并重装依赖，两个脚本都设了 `pnpm_config_verify_deps_before_run=false`，否则这些包又会被装回来。2026-11-15 对比过：这样构建的 Host 产物与之前的文件清单一致（只有前端资源的哈希文件名随上游变化）。
-- `pnpm store prune` 按锁文件判断包是否还在使用，上游锁文件列着所有平台，所以已经装过的其他平台包会一直留在 pnpm 仓库里，prune 删不掉。
+- 只安装构建机自己平台的原生包：上游 `pnpm-workspace.yaml` 的 `supportedArchitectures` 会装上 Windows、macOS 和 x64 的可选包（约 2GB），`build-host.sh` 与 `upstream-check.sh` 安装时加 `--os=linux --cpu=<本机架构>`。pnpm 11 在每次 `run`／`exec` 前会按 yaml 检查并重装依赖，两个脚本都设了 `pnpm_config_verify_deps_before_run=false`，否则这些包又会被装回来。Host 产物不包含这些包，不受影响。
+- `pnpm store prune` 按锁文件判断包是否还在使用，上游锁文件列着所有平台，所以已经装过的其他平台包会一直留在 pnpm 仓库里，prune 删不掉。要清掉只能删除 pnpm 仓库（`~/.local/share/pnpm/store`）和两份 `node_modules` 后重装（需要重新下载依赖；harness 二进制在 `apps/*-bin`，不受影响）。
 - Host 构建需要 Playwright 的 Chromium，脚本用同版本的 `playwright-core` CLI 安装。
 - 不要把产物解压到存储空间或用户文件区来测试：前者 64KB 的簇会让占用膨胀到 24GB，后者没有可执行权限（见 [fnos-platform-notes.md](fnos-platform-notes.md)）。
 
@@ -117,8 +117,8 @@ scripts/upstream-check.sh <分支或 commit> bash -c 'cd apps/host && node --imp
 ```
 
 - 只测已提交的内容：先在 `.upstream/cindy` 提交（或 amend），工作区有未提交改动时脚本会提示。
-- commit 以 git 对象的形式传到构建机：构建机上的 `~/cindy-dev`（`~/cindy` 的 worktree，首次运行时自动创建，远端 `mac` 指向 Mac 上的 `.upstream/cindy`）拉取该 commit，确认 HEAD 等于这个 SHA 且没有改动后才运行命令。不要再用补丁文件经共享目录传改动：曾两次读到损坏的补丁，`git apply` 失败后测试照样跑在未打补丁的树上。
-- `~/cindy-dev` 与 `build-host.sh` 使用的 `~/cindy` 分开，构建时的强制重置不会影响测试。锁文件变化时才重新安装（首次约 9 秒）。构建机的文件系统是 btrfs，pnpm 用写时复制克隆导入依赖，两份 `node_modules` 与 pnpm 仓库共用数据：`du` 每份显示约 5GB，实际新增约 1～2GB（`df` 前后对比）。估算占用要看 `df`，不要看 `du`。
+- commit 以 git 对象的形式传到构建机：构建机上的 `~/cindy-dev`（`~/cindy` 的 worktree，首次运行时自动创建，远端 `mac` 指向 Mac 上的 `.upstream/cindy`）拉取该 commit，确认 HEAD 等于这个 SHA 且没有改动后才运行命令。不要用补丁文件经共享目录传改动：构建机可能读到不完整的文件，而 `git apply` 失败后命令照样会在未打补丁的树上运行。
+- `~/cindy-dev` 与 `build-host.sh` 使用的 `~/cindy` 分开，构建时的强制重置不会影响测试。锁文件变化时才重新安装。构建机的文件系统是 btrfs，pnpm 用写时复制克隆导入依赖，两份 `node_modules` 与 pnpm 仓库共用数据，`du` 会重复计算；估算占用看 `df`。
 - 每一步（fetch、lfs、install、run）都打印耗时。Host 的类型检查要加大内存，否则会退出（134）：`scripts/upstream-check.sh <ref> env NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @cindy/host run typecheck`。
 
 ### 打包 fpk 并装进 VM
@@ -144,8 +144,8 @@ F app install-fpk build/fpk/cindy-<版本>-arm64.fpk --volume-id 2 \
 | 占用 | 大小 |
 |---|---|
 | 飞牛开发 VM（`fnOS-dev`，动态磁盘） | 约 7GB 起，随写入增长 |
-| 干净基线（`fnOS-baseline`） | 约 8GB |
-| OrbStack 构建机（依赖与 harness 缓存） | 约 11GB |
+| 干净基线 | 约 8GB（与开发 VM 共用部分不重复占用；压缩后约 2.5GB） |
+| OrbStack 构建机（依赖与 harness 缓存，含测试用的 `~/cindy-dev`） | 约 11GB |
 | Host 产物压缩包 | 约 0.8GB／每个架构 |
 
 - **VM 的磁盘文件只会增长，不会自动缩小。** 在 VM 里删除大量文件后，要执行 `sudo fstrim -av`，把空闲块还给 Mac（UTM 已启用 discard）。2026-11-13 曾因往存储空间解压 Host 产物，把 VM 撑到 35GB，fstrim 之后回到 6.9GB。
@@ -156,6 +156,8 @@ F app install-fpk build/fpk/cindy-<版本>-arm64.fpk --volume-id 2 \
 初始化完成后关机，在 UTM 中克隆一份基线。当前基线是 `fnOS-baseline-btrfs`（2026-11-13，只有 btrfs 存储空间、没有第三方应用）。
 
 UTM 的界面没有快照功能，所以「基线」就是用克隆得到的一台独立 VM。平时**不要开机**。需要在干净设备上验收时，右键基线选「运行时不保存更改」，关机后所有改动都会丢弃；也可以从基线再克隆一台临时 VM，用完删掉。APFS 上的克隆是写时复制，只有改动过的部分才占新空间。每次阶段验收前，从基线克隆出新的 VM 来测试。
+
+可以把基线的磁盘镜像压缩（`qemu-img convert -c -O qcow2`，再用 `qemu-img compare` 核对与原镜像一致）。UTM 自带的 qemu-img 是动态库，不能直接运行，可以在构建机里安装 `qemu-utils`，经挂载处理 Mac 上的文件。注意：刚克隆出的基线几乎全部与开发 VM 共用数据，这时压缩反而多占空间；压缩的好处是基线大小固定，不会随开发 VM 的改写增长。
 
 ### 本项目使用的 VM
 
