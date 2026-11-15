@@ -54,7 +54,7 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 | 网页端启动检查要求 Claude Code+Codex | 已删除 | [#10597](https://github.com/makecindy/cindy/issues/10597) | [#10598](https://github.com/makecindy/cindy/pull/10598) | **已合入**（2026-11-15，`6b0baae`） |
 | Web 子路径部署 | `0004` | [#10614](https://github.com/makecindy/cindy/issues/10614) | 分支 `feat/web-base-path` | 分诊机器人欢迎提 PR；已按建议加同源路径校验，`0004` 改由该分支导出。PR 草稿 `docs/upstream/09-web-base-path/pr.md` 待审阅，手工验证待 VM 实测（与 P1 验收同一次安装） |
 | Web 首次登录 API | — | [#10600](https://github.com/makecindy/cindy/issues/10600) | — | 已提交；过渡方案：Adapter 包装 CLI（国际版 Apple 已走通） |
-| Host 登录结果非 ok 时失败 | — | [#10599](https://github.com/makecindy/cindy/issues/10599) | 分支 `fix/host-login-outcomes` | 分诊给出修法；已按此实现（只改 Host，不需要本地补丁），Host 509 项测试与类型检查通过，PR 草稿 `docs/upstream/06-host-login-outcomes/pr.md` 待审阅。修好后报错更准确，但微信未绑定手机号的账号仍需先在桌面版完成绑定 |
+| Host 登录结果非 ok 时失败 | — | [#10599](https://github.com/makecindy/cindy/issues/10599) | [#10704](https://github.com/makecindy/cindy/pull/10704) | 已提交（2026-11-15），按分诊给出的修法实现，只改 Host，不需要本地补丁；Host 509 项测试与类型检查通过。修好后报错更准确，但微信未绑定手机号的账号仍需先在桌面版完成绑定 |
 | Host 手机号／邮箱登录 | — | 并入 [#10600](https://github.com/makecindy/cindy/issues/10600) | — | cn 提供手机号、微信、Apple，global 提供邮箱、Apple、Google（`/api/auth/providers`）；`cindy-host login` 只支持社交登录，已在 #10600 中提出 |
 | Host 本地模式（无账号） | — | [#10601](https://github.com/makecindy/cindy/issues/10601) | — | 已提交；网页端「跳过登录」无效 |
 | 只打包部分 agent 时模型目录失败 | 已删除 | [#10640](https://github.com/makecindy/cindy/issues/10640) | [#10642](https://github.com/makecindy/cindy/pull/10642) | **已合入**（2026-11-15，`ae78647`）；`upstream.lock` 已移到 `ae78647`。PR 的手工验证未补，合入前未要求 |
