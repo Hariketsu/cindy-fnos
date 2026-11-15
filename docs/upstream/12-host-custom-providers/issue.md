@@ -1,6 +1,6 @@
 # Issue 草稿：独立 Host 的网页端支持添加自带 API Key 的供应商
 
-> 状态：**草稿**，待用户审阅。
+> 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/issues/10644
 > 模板：`.github/ISSUE_TEMPLATE/feature_request.yml`（功能建议），标题前缀 `feat: `。
 > 先只提功能建议、请维护者确认方向，不附实现；涉及凭据写入，很可能触发维护者确认门（参考 #10429 / #10437）。
 > 查重（2026-11-15）：按「Host 供应商 API Key」「createCustomProvider」「网页 添加供应商」「Host custom provider」「独立 Host 模型供应商」「BYOK host」搜索 issue 和 PR，没有重复。

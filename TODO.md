@@ -59,7 +59,7 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 | Host 本地模式（无账号） | — | [#10601](https://github.com/makecindy/cindy/issues/10601) | — | 已提交；网页端「跳过登录」无效 |
 | 只打包部分 agent 时模型目录失败 | `0007` | [#10640](https://github.com/makecindy/cindy/issues/10640) | [#10642](https://github.com/makecindy/cindy/pull/10642) | 已提交（2026-11-15）；PR 的手工验证待新 fpk 装进 VM 后补充；网页端一直显示「模型列表暂时无法更新」。修法：只读取 `maker:list-available-agents` 列出的 agent，保留 #1468 的原子失败语义 |
 | 模型选择器崩溃（`modelGroups.get` 返回 null） | `0008` | [#10641](https://github.com/makecindy/cindy/issues/10641) | [#10643](https://github.com/makecindy/cindy/pull/10643) | 已提交（2026-11-15）；shim 的读方法兜底返回 `null`，打开选择器即「界面出错了」 |
-| 网页端添加自带 Key 的供应商 | — | 未提 | — | 查重无结果。上游 `docs/host/headless-runtime-plan.md` 把「供应商连接」列为 Host 必须完成的项，`channel-coverage.md` 中 `maker:provider:custom:*` 归为后台处理、尚未接入；Host 已能读取自定义供应商与加密凭据，缺写入接口。是否提功能建议待用户决定 |
+| 网页端添加自带 Key 的供应商 | — | [#10644](https://github.com/makecindy/cindy/issues/10644) | — | 已提交功能建议（2026-11-15），等维护者确认方向。查重无结果。上游 `docs/host/headless-runtime-plan.md` 把「供应商连接」列为 Host 必须完成的项，`channel-coverage.md` 中 `maker:provider:custom:*` 归为后台处理、尚未接入；Host 已能读取自定义供应商与加密凭据，缺写入接口 |
 
 流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<序号>-<主题>/`（已合入或关闭的移到 `archive/`），经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的 `fnos-integration` 分支按补丁编号依次叠加 #10419（`0002`）、#10429（`0003`）、`feat/web-base-path`（`0004`）、#10589（`0005`）、#10598（`0006`）、#10642（`0007`）、#10643（`0008`）后逐段导出，必须与 PR 代码一致。
 
