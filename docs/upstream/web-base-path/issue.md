@@ -1,6 +1,6 @@
 # Issue 草稿：网页端支持部署在反向代理的子路径下
 
-> 状态：**草稿**，待用户审阅。
+> 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/issues/10614
 > 模板：`.github/ISSUE_TEMPLATE/feature_request.yml`（功能建议），标题前缀 `feat: `。
 > 对应本地补丁 `patches/0004-web-base-path.patch`。本地补丁目前只在本仓库维护，issue 确认方向后再在 `.upstream/cindy` 开 PR 分支。
 > 代码位置按上游 `main` `b975dc3` 核对（2026-11-15）。已搜索上游 issue，没有找到子路径、base path、反向代理部署相关的现有 issue。
