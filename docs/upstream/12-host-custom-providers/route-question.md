@@ -1,6 +1,6 @@
 # #10644 评论草稿：实现前确认写入通道走哪条路
 
-> 状态：草稿，待用户审阅后发到 https://github.com/makecindy/cindy/issues/10644 。
+> 状态：已经用户审阅，2026-11-15 发出：https://github.com/makecindy/cindy/issues/10644#issuecomment-6896283058
 > 代码位置按上游 `main` `ae78647` 核对（2026-11-15）。
 > 背景：分诊回复认可方向、欢迎提 PR，建议在 `hostChannelContract.ts` 与 `service.mjs` 中接入。核对代码时发现 Host 另有一套通用 IPC 通道，且注明暂不接写操作，所以动手前先问维护者。
 
