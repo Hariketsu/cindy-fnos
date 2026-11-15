@@ -7,6 +7,12 @@
 #   adapter/   fnOS Adapter, run with the Host's bundled Node
 #   app.sock   gateway socket created by the adapter
 
+# fnOS can run this script with no PATH in its environment. bash then falls back to
+# its built-in default (which ends in ".") without exporting it, so the processes it
+# starts get none: the Host's /bin/sh calls and the agent's shell tools fail with
+# "not found". Set a fixed PATH, without ".", for everything started from here.
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
 APP="${TRIM_APPDEST}"
 HOST_DIR="${APP}/host"
 NODE="${HOST_DIR}/bin/node"

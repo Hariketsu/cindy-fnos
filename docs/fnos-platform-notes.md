@@ -79,6 +79,7 @@
 | 共享目录 | `/vol1/@appshare/<app>/...`；目录权限是 `drwx------`，属主为包用户，管理员也要用 sudo 才能直接读取 |
 | 系统自带 | `/usr/bin/python3`（3.11）、git、curl、docker；**没有 Node.js** |
 | `TRIM_SYS_ARCH` | `arm` |
+| `PATH`（2026-11-15） | **安装完成后自动启动时，生命周期脚本的环境里没有 `PATH`**（`/proc/<pid>/environ` 中不存在该变量）。bash 脚本本身能运行，因为 bash 会退回内置的默认搜索路径；但它启动的子进程没有：Host 里的 `/bin/sh` 调用报 `head: not found`、`hostname: not found`。经 `fnos-cli app start` 启动时子进程看到的是 `/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:.`，这正是 Debian bash 在 `env -i` 下的内置默认值（末尾带 `.`），不一定来自飞牛。`cmd/main` 开头固定导出不含 `.` 的 `PATH` |
 | 生命周期脚本位置（2026-11-15） | `/var/apps/<app>/cmd/main` 等，属主 root、所有人可执行；**不在 `TRIM_APPDEST` 下**。`/var/apps/<app>/` 里还有指向各目录的符号链接：`target`→`TRIM_APPDEST`、`var`→`TRIM_PKGVAR`、`etc`→`TRIM_PKGETC`、`home`、`tmp`、`meta`。应用进程要回调生命周期脚本时，由脚本用 `readlink -f "$0"` 把自身路径传下去 |
 | `TRIM_DATA_ACCESSIBLE_PATHS` | 启动时读取；之后通过 pickSharedFile 新增的授权**不会**更新到正在运行的进程的环境变量里，要用后端 API 查询 |
 
