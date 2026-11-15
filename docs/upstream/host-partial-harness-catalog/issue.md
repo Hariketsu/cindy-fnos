@@ -1,6 +1,6 @@
 # Issue 草稿：只打包 Pi 的独立 Host，网页端模型目录始终「暂时无法更新」
 
-> 状态：**草稿**，待用户审阅。
+> 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/issues/10640
 > 模板：`.github/ISSUE_TEMPLATE/bug_report.yml`（缺陷报告）。
 > 修复 PR 草稿见同目录 `pr.md`（分支 `fix/capabilities-unregistered-agents`）。
 > 查重（2026-11-15）：按「is not registered capabilities」「模型列表暂时无法更新」「loadLocalCapabilitiesSnapshot」等搜索 issue 和 PR，没有重复；最相关的是已关闭的 #1467（Pi 下载超时导致供应商页为空）及其修复 #1468。

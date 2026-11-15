@@ -4,8 +4,7 @@ Why: the web shim's generic read fallback answers modelGroups.get() with null;
 the renderer stores it as the model group config and the model picker crashes
 ("界面出错了", Cannot read properties of null (reading 'routes')). The read now
 rejects as unsupported, so the renderer keeps its empty defaults.
-Upstream: issue and PR drafted in docs/upstream/web-model-groups-null/
-(branch fix/web-model-groups-unsupported), not yet submitted.
+Upstream: issue https://github.com/makecindy/cindy/issues/10641, PR https://github.com/makecindy/cindy/pull/10643
 Remove when: upstream's web shim no longer answers modelGroups.get with null
 (either rejected or served by the Host).
 diff --git a/apps/host/src/web-shim.test.mjs b/apps/host/src/web-shim.test.mjs

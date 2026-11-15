@@ -1,7 +1,7 @@
 # PR 草稿：网页 shim 的模型组读取明确报「不支持」，不再返回 null
 
-> 状态：**草稿**，待用户审阅。
-> 关联 issue：同目录 `issue.md`（提交后填编号）
+> 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/pull/10643
+> 关联 issue：makecindy/cindy#10641
 > 分支：本地 `.upstream/cindy` 中的 `fix/web-model-groups-unsupported`，基于上游 `main`（`b975dc3`），1 个 commit，带 DCO 签名。
 > 模板：上游 `.github/PULL_REQUEST_TEMPLATE.md`
 > 与其他 PR 的关系：和 #10598、子路径 PR 都改 `apps/web/shim.js` 与 `apps/host/src/web-shim.test.mjs`，改动位置不重叠。
@@ -23,7 +23,7 @@ Host 还没有模型组，网页 shim 对未实现的 `modelGroups.get` 走通�
 
 ### 范围
 
-- 关联 Issue / 需求：Closes #<issue>
+- 关联 Issue / 需求：Closes #10641
 - 本 PR 包含：
   - `apps/web/shim.js`：新增 `'modelGroups.get'` 路由，返回 `Promise.reject(unsupportedHostChannel('modelGroups.get'))`，并注明原因；
   - `apps/host/src/web-shim.test.mjs`：新增回归用例。
@@ -56,7 +56,7 @@ pnpm check:test-hygiene
 
 测试价值（`web-shim.test.mjs`，补充到现有文件）
 - 生产入口与可观察结果：浏览器 shim 公开的 `window.electronAPI.modelGroups.get()`，即 `modelGroupsClient.refreshModelGroups()` 读取模型组配置的入口；可观察结果是它 reject 而不是解析为 `null`。
-- Bug／规则依据：#<issue>；`docs/host/maintenance-plan.md` 第一批「已明确未实现的设置……返回明确错误」。
+- Bug／规则依据：#10641；`docs/host/maintenance-plan.md` 第一批「已明确未实现的设置……返回明确错误」。
 - 现有覆盖缺口：「unsupported web actions」用例只覆盖写操作；读方法走兜底，没有用例检查兜底值会不会被 renderer 当成真实数据。
 - 最小失败输入：调用一次 `modelGroups.get()`（修改前解析为 `null`）。
 - tier：unit，复用文件内已构建的 shim，无 I/O。
@@ -74,7 +74,7 @@ pnpm check:test-hygiene
 
 ![模型选择器正常打开](after-picker.png)
 
-修改后的验证是把同样的一行加到发行包已构建的 `resources/web/shim.js` 中、重启 Host 后进行的。拍摄时 VM 上还临时带着 capabilities 问题（#<capabilities issue>）的修复，否则只打包 Pi 时选择器里没有模型。
+修改后的验证是把同样的一行加到发行包已构建的 `resources/web/shim.js` 中、重启 Host 后进行的。拍摄时 VM 上还临时带着 capabilities 问题（#10640）的修复，否则只打包 Pi 时选择器里没有模型。
 
 ### 未执行的验证
 

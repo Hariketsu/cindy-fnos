@@ -1,6 +1,6 @@
 # Issue 草稿：网页端打开模型选择器时界面崩溃（modelGroups.get 返回 null）
 
-> 状态：**草稿**，待用户审阅。
+> 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/issues/10641
 > 模板：`.github/ISSUE_TEMPLATE/bug_report.yml`（缺陷报告）。
 > 修复 PR 草稿见同目录 `pr.md`（分支 `fix/web-model-groups-unsupported`）。
 > 查重（2026-11-15）：按「modelGroups」「模型组 网页」「界面出错了 模型」「Cannot read properties of null routes」搜索 issue 和 PR，没有重复。上游 `docs/host/channel-coverage.md` 把 `model-groups:*` 七个通道列为 A 类（应由后台处理），目前都未接入。
@@ -37,7 +37,7 @@ TypeError: Cannot read properties of null (reading 'routes')
 ### 复现步骤 / Steps to reproduce
 
 1. 构建并启动独立 Host，登录后在浏览器打开网页端
-2. 让模型选择器有可选模型（只打包 Pi 时要先解决「模型列表暂时无法更新」的问题，见 #<capabilities issue>；打包全部 agent 时无此前提）
+2. 让模型选择器有可选模型（只打包 Pi 时要先解决「模型列表暂时无法更新」的问题，见 #10640；打包全部 agent 时无此前提）
 3. 点击输入框右下角的模型选择器
 4. 主区域变成「界面出错了」，错误详情如上
 

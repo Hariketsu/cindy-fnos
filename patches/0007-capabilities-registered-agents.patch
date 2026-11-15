@@ -5,8 +5,7 @@ capabilities and fails the whole refresh when a core agent is not registered.
 The fnOS app bundles only Pi, so every refresh failed and the web client showed
 "模型列表暂时无法更新" with no models. The snapshot now reads only the agents in
 maker:list-available-agents; listed agents keep their atomic failure.
-Upstream: issue and PR drafted in docs/upstream/host-partial-harness-catalog/
-(branch fix/capabilities-unregistered-agents), not yet submitted.
+Upstream: issue https://github.com/makecindy/cindy/issues/10640, PR https://github.com/makecindy/cindy/pull/10642
 Remove when: upstream's model catalog loads when a runtime registers only
 some agents.
 diff --git a/apps/desktop/src/renderer/__tests__/agentCapabilitiesDeviceCache.test.ts b/apps/desktop/src/renderer/__tests__/agentCapabilitiesDeviceCache.test.ts

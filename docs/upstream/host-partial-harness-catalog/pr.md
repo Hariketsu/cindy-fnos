@@ -1,7 +1,7 @@
 # PR 草稿：模型目录只读取 runtime 注册了的 agent 的能力
 
-> 状态：**草稿**，待用户审阅。「手工验证」一节要等带本分支的 fpk 装进 VM 后补齐。
-> 关联 issue：同目录 `issue.md`（提交后填编号）
+> 状态：**已提交**（经用户审阅）：https://github.com/makecindy/cindy/pull/10642 。「手工验证」一节待带本分支的 fpk 装进 VM 后在 PR 中补充。
+> 关联 issue：makecindy/cindy#10640
 > 分支：本地 `.upstream/cindy` 中的 `fix/capabilities-unregistered-agents`，基于上游 `main`（`b975dc3`），1 个 commit，带 DCO 签名。
 > 模板：上游 `.github/PULL_REQUEST_TEMPLATE.md`
 > 验证数据均为实测（2026-11-15，构建机 linux-arm64，Debian 12，Node 22.22.3，pnpm 11.28.9）。
@@ -24,7 +24,7 @@
 
 ### 范围
 
-- 关联 Issue / 需求：Closes #<issue>
+- 关联 Issue / 需求：Closes #10640
 - 本 PR 包含：
   - `apps/desktop/src/renderer/hooks/useAgentCapabilities.ts`：`loadLocalCapabilitiesSnapshot` 先调用 `listAvailableAgents()`，只对列表中的 agent 调用 `getCapabilities`；`MakerApiShape` 补上该方法的类型；
   - `apps/desktop/src/renderer/__tests__/agentCapabilitiesDeviceCache.test.ts`：新增「runtime 只注册了 Pi」用例；两个桩函数补上 `listAvailableAgents`（默认返回三个 agent，原有用例的输入不变）；
@@ -71,7 +71,7 @@ pnpm exec prettier（只看本 PR 改动的行）
 
 测试价值（`agentCapabilitiesDeviceCache.test.ts`，补充到现有文件）
 - 生产入口与可观察结果：`refreshLocalCatalogSnapshot()`（设置页、模型选择器与启动预加载共用的目录刷新入口）；可观察结果是刷新是否成功、提交的 provider 快照，以及各 agent 的能力缓存。
-- Bug／规则依据：#<issue>；`--harnesses` 允许只打包部分 agent（#10418）；#1468 规定核心 agent 失败要原子回滚。
+- Bug／规则依据：#10640；`--harnesses` 允许只打包部分 agent（#10418）；#1468 规定核心 agent 失败要原子回滚。
 - 现有覆盖缺口：现有用例都假定三个 agent 全部注册，「Pi 不可用」和「核心 agent 失败」两类用例覆盖的是读取失败，没有覆盖 runtime 根本没有注册某个 agent 的情况。
 - 最小失败输入：runtime 只注册 `pi`。刷新必须成功、提交 provider 快照、只请求一次 `getCapabilities('pi')`，Claude Code / Codex 的缓存为空（修改前刷新失败）。
 - tier：unit，复用文件内已有的 IPC 桩，无 I/O。
@@ -83,7 +83,7 @@ pnpm exec prettier（只看本 PR 改动的行）
 
 （待补）计划：在飞牛 fnOS 1.2.1010（linux-arm64）虚拟机中，用带本分支 renderer 的只打包 Pi 的 Host，确认新建任务页和「设置 → 模型供应商」正常显示 Pi 的模型，并能发送一条消息。
 
-原因已在同一环境中确认：在已构建的 renderer 里临时放宽这处判断后，模型选择器立即正常显示（见 issue 截图）。
+原因已在同一环境中确认：在已构建的 renderer 里临时放宽这处判断后，模型选择器立即正常显示（见 #10640 的截图）。
 
 ### 未执行的验证
 
