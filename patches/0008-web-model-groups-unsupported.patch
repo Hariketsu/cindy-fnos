@@ -1,0 +1,45 @@
+Subject: web: reject the model groups read instead of answering null
+
+Why: the web shim's generic read fallback answers modelGroups.get() with null;
+the renderer stores it as the model group config and the model picker crashes
+("界面出错了", Cannot read properties of null (reading 'routes')). The read now
+rejects as unsupported, so the renderer keeps its empty defaults.
+Upstream: issue and PR drafted in docs/upstream/web-model-groups-null/
+(branch fix/web-model-groups-unsupported), not yet submitted.
+Remove when: upstream's web shim no longer answers modelGroups.get with null
+(either rejected or served by the Host).
+diff --git a/apps/host/src/web-shim.test.mjs b/apps/host/src/web-shim.test.mjs
+index 8a01f91811..31aa84c568 100644
+--- a/apps/host/src/web-shim.test.mjs
++++ b/apps/host/src/web-shim.test.mjs
+@@ -223,6 +223,15 @@ test('unsupported web actions cannot report a successful save or execution', asy
+   assert.equal(b.calls.length, 0);
+ });
+ 
++// Regression: the generic read fallback answered `modelGroups.get()` with `null`;
++// the renderer stored it as the model group config and the model picker crashed
++// reading `config.routes`. Minimal input: one call, which must reject.
++test('the model groups read rejects instead of answering a null config', async () => {
++  const b = browser();
++  await assert.rejects(b.api.modelGroups.get(), { code: 'HOST_CHANNEL_UNSUPPORTED' });
++  assert.equal(b.calls.length, 0);
++});
++
+ // Real-browser regression: opening a task and finishing a reply invoked these
+ // desktop presentation hooks without awaiting them, causing unhandled rejections.
+ // No native window or notification surface exists in this client; settings writes
+diff --git a/apps/web/shim.js b/apps/web/shim.js
+index 89651d0e13..b344ebe96b 100644
+--- a/apps/web/shim.js
++++ b/apps/web/shim.js
+@@ -573,6 +573,10 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
+     'checkAppUpdate': () => ({ hasUpdate: false }),
+     'modelFavoritesHost.ready': () => undefined,
+     'modelFavoritesHost.changed': () => () => {},
++    // The Host has no model groups yet. The generic read fallback would answer
++    // `null`, which the renderer stores as the config and the model picker then
++    // crashes on; rejecting keeps the renderer's built-in empty defaults.
++    'modelGroups.get': () => Promise.reject(unsupportedHostChannel('modelGroups.get')),
+     'gitContext.listAllPrRefs': () => [],
+     'gitContext.getForSession': () => ({ workdir: null, head: null, source: null }),
+     'gitContext.listPrRefs': () => [],

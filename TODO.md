@@ -16,7 +16,8 @@
 
 1. [x] **集成构建并装进 VM**（2026-11-15）：fpk 装进 volume 2，飞牛桌面两个入口都打开原版界面（未登录状态），请求全部留在前缀内，见 [证据](docs/evidence/2026-11-15-p1-integration-install.md)
 2. [x] **网页首次登录**（2026-11-15）：安装向导选择版本（中国大陆版：微信；国际版：Google、Apple）；Adapter 的 `/_fnos/login`（原版风格）运行 `cmd/main host-login <方式>`（停 Host → `cindy-host login --no-open` → 重启 Host），`/connect` 也转到登录页。国际版 Apple 登录成功进入主界面，见 [证据](docs/evidence/2026-11-15-p1-integration-install.md)；中国大陆版微信登录受上游限制失败（见「上游事项」）
-3. [ ] **P1 验收**（需要用户提供 DeepSeek 临时 Key）：VM 现为中国大陆版、未登录，先重装成国际版并用 Apple 登录 → 配 DeepSeek → 飞牛窗口内真实任务（流式、停止、权限确认）→ 重启 VM 后保持登录 → 升级 → 卸载；另在 ext4 估算占用
+3. [ ] **P1 验收**：VM 已重装为 fpk 0.1.3 国际版并用 Apple 登录（2026-11-15）。已走通：用 Cindy AI 的 GLM 5.3 Flash 发送真实任务，Pi 执行 shell 命令、流式回复正常，页面 50 个请求全部在 `/app/cindy/` 前缀内。待做：停止、权限确认 → 重启 VM 后保持登录 → 升级 → 卸载；另在 ext4 估算占用。VM 上的 0.1.3 临时手改了 renderer 与 shim（对应 `0007`、`0008`）和 `cmd/main`（PATH），下次用新 fpk 重装后才是正式状态
+4. [ ] **自带 API Key 的供应商（DeepSeek）**：网页端「添加供应商」能列出 DeepSeek 预设，但保存调用的 `maker.createCustomProvider` 在 Host 与 shim 中都未实现，暂时只能用 Cindy 账号内置的模型（含 Cindy AI 提供的 DeepSeek V4）。见「上游事项」
 
 Adapter 集成时要验证 / 加固（子代理 A 提出）：
 
@@ -56,8 +57,11 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 | Host 登录结果非 ok 时失败 | — | [#10599](https://github.com/makecindy/cindy/issues/10599) | — | 已提交；中国大陆版微信登录因此失败 |
 | Host 手机号／邮箱登录 | — | 并入 [#10600](https://github.com/makecindy/cindy/issues/10600) | — | cn 提供手机号、微信、Apple，global 提供邮箱、Apple、Google（`/api/auth/providers`）；`cindy-host login` 只支持社交登录，已在 #10600 中提出 |
 | Host 本地模式（无账号） | — | [#10601](https://github.com/makecindy/cindy/issues/10601) | — | 已提交；网页端「跳过登录」无效 |
+| 只打包部分 agent 时模型目录失败 | `0007` | 草稿 `docs/upstream/host-partial-harness-catalog/` | 分支 `fix/capabilities-unregistered-agents` | issue、PR 草稿待审阅；网页端一直显示「模型列表暂时无法更新」。修法：只读取 `maker:list-available-agents` 列出的 agent，保留 #1468 的原子失败语义 |
+| 模型选择器崩溃（`modelGroups.get` 返回 null） | `0008` | 草稿 `docs/upstream/web-model-groups-null/` | 分支 `fix/web-model-groups-unsupported` | issue、PR 草稿待审阅；shim 的读方法兜底返回 `null`，打开选择器即「界面出错了」 |
+| 网页端添加自带 Key 的供应商 | — | 未提 | — | 查重无结果。上游 `docs/host/headless-runtime-plan.md` 把「供应商连接」列为 Host 必须完成的项，`channel-coverage.md` 中 `maker:provider:custom:*` 归为后台处理、尚未接入；Host 已能读取自定义供应商与加密凭据，缺写入接口。是否提功能建议待用户决定 |
 
-流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<主题>/`，经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的 `fnos-integration` 分支按补丁编号依次叠加 #10419（`0002`）、#10429（`0003`）、`feat/web-base-path`（`0004`）、#10589（`0005`）、#10598（`0006`）后逐段导出，必须与 PR 代码一致。
+流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<主题>/`，经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的 `fnos-integration` 分支按补丁编号依次叠加 #10419（`0002`）、#10429（`0003`）、`feat/web-base-path`（`0004`）、#10589（`0005`）、#10598（`0006`）、`fix/capabilities-unregistered-agents`（`0007`）、`fix/web-model-groups-unsupported`（`0008`）后逐段导出，必须与 PR 代码一致。
 
 ## 暂缓的决定
 

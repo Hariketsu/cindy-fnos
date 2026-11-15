@@ -1,0 +1,149 @@
+Subject: desktop: read capabilities only for agents the runtime registered
+
+Why: loadLocalCapabilitiesSnapshot asks Claude Code, Codex and Pi for
+capabilities and fails the whole refresh when a core agent is not registered.
+The fnOS app bundles only Pi, so every refresh failed and the web client showed
+"模型列表暂时无法更新" with no models. The snapshot now reads only the agents in
+maker:list-available-agents; listed agents keep their atomic failure.
+Upstream: issue and PR drafted in docs/upstream/host-partial-harness-catalog/
+(branch fix/capabilities-unregistered-agents), not yet submitted.
+Remove when: upstream's model catalog loads when a runtime registers only
+some agents.
+diff --git a/apps/desktop/src/renderer/__tests__/agentCapabilitiesDeviceCache.test.ts b/apps/desktop/src/renderer/__tests__/agentCapabilitiesDeviceCache.test.ts
+index 365c8736f9..c27eed873c 100644
+--- a/apps/desktop/src/renderer/__tests__/agentCapabilitiesDeviceCache.test.ts
++++ b/apps/desktop/src/renderer/__tests__/agentCapabilitiesDeviceCache.test.ts
+@@ -39,7 +39,10 @@ function stubElectron() {
+   const invoke = vi.fn(async (deviceId: string, _channel: string, args: unknown[]) =>
+     caps(`${deviceId}:${String(args[0])}`),
+   );
+-  vi.stubGlobal('window', { electronAPI: { maker: { getCapabilities }, deviceLink: { invoke } } });
++  const listAvailableAgents = vi.fn(async () => ['claude-code', 'codex', 'pi']);
++  vi.stubGlobal('window', {
++    electronAPI: { maker: { getCapabilities, listAvailableAgents }, deviceLink: { invoke } },
++  });
+   return { getCapabilities, invoke };
+ }
+ 
+@@ -48,6 +51,8 @@ function stubLocalCatalog() {
+   let capabilityRevision = 'old';
+   let unavailableAgent: string | null = null;
+   let transientError: { agent: string; message: string } | null = null;
++  let registeredAgents = ['claude-code', 'codex', 'pi'];
++  const listAvailableAgents = vi.fn(async () => registeredAgents);
+   const getCapabilities = vi.fn(async (agent: string) => {
+     if (transientError?.agent === agent) throw new Error(transientError.message);
+     if (agent === unavailableAgent) throw new Error(`Agent '${agent}' is not registered`);
+@@ -59,9 +64,14 @@ function stubLocalCatalog() {
+     providers: [{ id: providerId }],
+     providerOrder: [providerId],
+   }));
+-  vi.stubGlobal('window', { electronAPI: { maker: { getCapabilities, listProviders } } });
++  vi.stubGlobal('window', {
++    electronAPI: { maker: { getCapabilities, listAvailableAgents, listProviders } },
++  });
+   return {
+     getCapabilities,
++    setRegisteredAgents(agents: string[]): void {
++      registeredAgents = agents;
++    },
+     setSnapshot(nextProviderId: string, nextCapabilityRevision: string): void {
+       providerId = nextProviderId;
+       capabilityRevision = nextCapabilityRevision;
+@@ -158,6 +168,27 @@ describe('useAgentCapabilities deviceId-aware cache', () => {
+     expect(capabilities.getCachedCapabilities('pi')).toBeNull();
+   });
+ 
++  // 独立 Host 可以只打包 Pi（#10418）。未打包的核心 agent 不在 runtime 注册列表里，
++  // 不能被当成核心 agent 的临时失败，让整个模型目录停在「模型列表暂时无法更新」。
++  it('runtime 只注册了 Pi 时只读取 Pi 能力，并提交 provider 目录', async () => {
++    const harness = stubLocalCatalog();
++    harness.setSnapshot('provider-host', 'host');
++    harness.setRegisteredAgents(['pi']);
++    const catalog = await import('@/lib/localCatalogSnapshot');
++    const providers = await import('@/lib/providersSnapshotStore');
++    const capabilities = await import('@/hooks/useAgentCapabilities');
++
++    await expect(catalog.refreshLocalCatalogSnapshot()).resolves.toBe(true);
++
++    expect(harness.getCapabilities.mock.calls).toEqual([['pi']]);
++    expect(providers.getCachedProvidersSnapshot()?.providers).toEqual([{ id: 'provider-host' }]);
++    expect(capabilities.getCachedCapabilities('pi')?.availableModels[0].displayName).toBe(
++      'host:pi',
++    );
++    expect(capabilities.getCachedCapabilities('claude-code')).toBeNull();
++    expect(capabilities.getCachedCapabilities('codex')).toBeNull();
++  });
++
+   it('Pi 变为不可用时清除旧能力，并用新 provider 快照替换核心能力', async () => {
+     const harness = stubLocalCatalog();
+     const catalog = await import('@/lib/localCatalogSnapshot');
+diff --git a/apps/desktop/src/renderer/__tests__/remoteModelHooksDeviceOwnership.test.tsx b/apps/desktop/src/renderer/__tests__/remoteModelHooksDeviceOwnership.test.tsx
+index 6e99f250ea..824cd508f1 100644
+--- a/apps/desktop/src/renderer/__tests__/remoteModelHooksDeviceOwnership.test.tsx
++++ b/apps/desktop/src/renderer/__tests__/remoteModelHooksDeviceOwnership.test.tsx
+@@ -57,7 +57,8 @@ describe('remote model hook device ownership', () => {
+       }
+       return capabilities(`local:${agentKind}`);
+     });
+-    setElectronApi({ maker: { getCapabilities } });
++    const listAvailableAgents = async () => ['claude-code', 'codex', 'pi'];
++    setElectronApi({ maker: { getCapabilities, listAvailableAgents } });
+     const mod = await import('@/hooks/useAgentCapabilities');
+     await mod.preloadAllCapabilities();
+ 
+@@ -101,7 +102,8 @@ describe('remote model hook device ownership', () => {
+       }
+       return Promise.resolve(capabilities(`local:${agentKind}`));
+     });
+-    setElectronApi({ maker: { getCapabilities } });
++    const listAvailableAgents = async () => ['claude-code', 'codex', 'pi'];
++    setElectronApi({ maker: { getCapabilities, listAvailableAgents } });
+     const mod = await import('@/hooks/useAgentCapabilities');
+ 
+     const frames: Array<ReturnType<typeof mod.useAgentCapabilities>> = [];
+@@ -149,7 +151,8 @@ describe('remote model hook device ownership', () => {
+       }
+       return Promise.resolve(capabilities(`refresh:${agentKind}`));
+     });
+-    setElectronApi({ maker: { getCapabilities } });
++    const listAvailableAgents = async () => ['claude-code', 'codex', 'pi'];
++    setElectronApi({ maker: { getCapabilities, listAvailableAgents } });
+     const mod = await import('@/hooks/useAgentCapabilities');
+ 
+     const frames: Array<ReturnType<typeof mod.useAgentCapabilities>> = [];
+diff --git a/apps/desktop/src/renderer/hooks/useAgentCapabilities.ts b/apps/desktop/src/renderer/hooks/useAgentCapabilities.ts
+index c579edac88..c3f8b37a76 100644
+--- a/apps/desktop/src/renderer/hooks/useAgentCapabilities.ts
++++ b/apps/desktop/src/renderer/hooks/useAgentCapabilities.ts
+@@ -329,6 +329,7 @@ function parseAgentCapabilities(value: unknown): AgentCapabilities {
+ 
+ interface MakerApiShape {
+   getCapabilities: (agentKind: AgentKind) => Promise<AgentCapabilities>;
++  listAvailableAgents: () => Promise<readonly AgentKind[]>;
+ }
+ 
+ interface DeviceLinkShape {
+@@ -734,6 +735,10 @@ export function beginLocalCapabilitiesRefresh(): number {
+ /**
+  * 读取本地 agent 能力快照；核心 agent 失败向上抛，只有明确的 Pi 未注册结果才不阻断 provider 目录。
+  *
++ * 只读取 runtime 注册了的 agent（`maker:list-available-agents`）：独立 Host 可以只打包
++ * 部分 agent，未打包的 agent 不在列表里，不能让它的未注册错误把整个目录判为失败。
++ * 列表里的 agent 仍按原样原子失败。
++ *
+  * Pi 的 CLI 是 best-effort 下载的目录分发，开发机或网络受限时可能暂时缺失。
+  * 明确未注册时不能让 `maker:get-capabilities('pi')` 的单点失败把 Claude/Codex
+  * 模型目录整组回滚为空；但临时 IPC、序列化或解析错误必须向上抛，让联合刷新保留
+@@ -742,8 +747,10 @@ export function beginLocalCapabilitiesRefresh(): number {
+ export async function loadLocalCapabilitiesSnapshot(): Promise<LocalCapabilitiesSnapshot> {
+   const api = getMakerApi();
+   if (!api) throw new Error('maker IPC not available');
++  const available = new Set(await api.listAvailableAgents());
++  const agents = ALL_AGENT_KINDS.filter((agent) => available.has(agent));
+   const results = await Promise.allSettled(
+-    ALL_AGENT_KINDS.map(async (agent): Promise<readonly [AgentKind, AgentCapabilities] | null> => {
++    agents.map(async (agent): Promise<readonly [AgentKind, AgentCapabilities] | null> => {
+       try {
+         return [agent, await api.getCapabilities(agent)] as const;
+       } catch (error) {
