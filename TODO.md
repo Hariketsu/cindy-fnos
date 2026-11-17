@@ -16,7 +16,7 @@
 
 1. [x] **集成构建并装进 VM**（2026-11-15）：fpk 装进 volume 2，飞牛桌面两个入口都打开原版界面（未登录状态），请求全部留在前缀内，见 [证据](docs/evidence/2026-11-15-p1-integration-install.md)
 2. [x] **网页首次登录**（2026-11-15）：安装向导选择版本（中国大陆版：微信；国际版：Google、Apple）；Adapter 的 `/_fnos/login`（原版风格）运行 `cmd/main host-login <方式>`（停 Host → `cindy-host login --no-open` → 重启 Host），`/connect` 也转到登录页。国际版 Apple 登录成功进入主界面，见 [证据](docs/evidence/2026-11-15-p1-integration-install.md)；中国大陆版微信登录受上游限制失败（见「上游事项」）
-3. [ ] **P1 验收**：VM 已重装为 fpk 0.1.3 国际版并用 Apple 登录（2026-11-15）。已走通：用 Cindy AI 的 GLM 5.3 Flash 发送真实任务，Pi 执行 shell 命令、流式回复正常，页面 50 个请求全部在 `/app/cindy/` 前缀内。待做：停止、权限确认 → 重启 VM 后保持登录 → 升级 → 卸载；另在 ext4 估算占用。VM 上的 0.1.3 临时手改了 renderer 与 shim（对应上游 #10642、#10643，已合入 `ae78647`）和 `cmd/main`（PATH），下次用基于 `ae78647` 的新 fpk 重装后才是正式状态。`upstream.lock` 前移到 `ae78647` 后已验证（2026-11-15）：补丁按顺序应用，Host 构建成功，Host 515 项测试与类型检查通过；新产物尚未装进 VM
+3. [ ] **P1 验收**：2026-11-17 用 `upstream.lock`=`fe0daea` + 补丁 `0003`～`0007` 的 fpk 0.1.4（测试包去掉了 Adapter 登录，改用原版登录页）在开发 VM 上验收：网页 Apple 登录与登出后再登录、GLM 5.3 Flash 流式回复、权限确认、停止、DeepSeek 自带 Key、强制断电重启后自启并保持登录与凭据，均通过（证据待写入 `docs/evidence/`）。待做：应用中心手动升级、卸载；`fnos-cli power reboot` 后 VM 黑屏 6 分钟以上未起来、强制断电后正常，原因未查明（Cindy 停止流程有 31 秒上限，基本排除），卸载前再复现一次
 4. [ ] **自带 API Key 的供应商（DeepSeek）**：网页端「添加供应商」能列出 DeepSeek 预设，但保存调用的 `maker.createCustomProvider` 在 Host 与 shim 中都未实现，暂时只能用 Cindy 账号内置的模型（含 Cindy AI 提供的 DeepSeek V4）。已提功能建议 [#10644](https://github.com/makecindy/cindy/issues/10644)，分诊已认可方向并欢迎提 PR；选定 C 路线：先在 issue 下问维护者写通道走契约通道还是通用 IPC 通道，已发评论（2026-11-15，[链接](https://github.com/makecindy/cindy/issues/10644#issuecomment-6896283058)），等维护者答复
 
 Adapter 集成时要验证 / 加固（子代理 A 提出）：
@@ -28,10 +28,11 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 其他未决：
 
 - [ ] Host 登录遇到「需绑定手机号／选择账号」时失败（`no refresh token`）：登录页已提示用户先在 Cindy 桌面版用同一方式登录并完成设置。上游 [#10704](https://github.com/makecindy/cindy/pull/10704) 已让 CLI 报错说明缺哪一步（待 `upstream.lock` 前移）；在网页上完成绑定要靠 [#10600](https://github.com/makecindy/cindy/issues/10600)
+- [ ] Adapter 的登录页（包装 `cindy-host login` CLI）与 #11048 的原版网页登录取舍：#11048 合入后，正式包是否去掉 `CINDY_FNOS_MAIN`、直接用原版登录页
+- [ ] 只打包 Pi 时，账号默认模型（如 `claude-sonnet-4-6`）不属于已打包的 Agent，新输入框显示「模型信息暂不可用」，需手动换模型；页面还会请求未打包 Agent 的 `/api/capabilities`（404）。属于 #10640 同类问题，待决定是否提上游 issue
 - [ ] 升级路径：`fnos-cli app install-fpk` 对已安装应用报 10236「应用已存在」；应用中心「手动安装」升级需要人工在界面上试一次（见平台笔记）
 - [ ] 非管理员账号能否读取应用目录里的 600 文件（管理员可以，见平台笔记 `trimacl`）
 
-- [ ] 未登录 Cindy 时，每个打开的页面每秒请求一次 `/events`（409 `owner_runtime_unavailable`），Adapter 每次记一行日志。网页登录已实现，未登录时首页会转到 Adapter 登录页，待复查是否仍有页面在刷 `/events`；必要时在 Adapter 合并重复日志
 
 - [ ] 应用图标：目前是 fnpack 默认图标；Cindy logo 属品牌素材，是否使用待用户决定
 - [ ] 后端开放 API `trim.system.getPlatformConfig` 返回 403（不阻塞，前端接口可用）
@@ -48,20 +49,20 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 | 事项 | 本地补丁 | Issue | PR | 状态 |
 |---|---|---|---|---|
 | 构建时可选 harness | 已删除 | [#10404](https://github.com/makecindy/cindy/issues/10404) | [#10418](https://github.com/makecindy/cindy/pull/10418) | **已合入**（2026-11-13，`a54e488`）；`upstream.lock` 已移到 `b975dc3`，补丁已删除 |
-| 依赖复制去重 | `0002` | [#10406](https://github.com/makecindy/cindy/issues/10406) | [#10419](https://github.com/makecindy/cindy/pull/10419) | **已合入**（2026-11-15，`88941ba`）；`upstream.lock` 前移过 `88941ba` 后删除 `0002` |
+| 依赖复制去重 | 已删除 | [#10406](https://github.com/makecindy/cindy/issues/10406) | [#10419](https://github.com/makecindy/cindy/pull/10419) | **已合入**（2026-11-15，`88941ba`）；lock 已移到 `fe0daea`，补丁已删除 |
 | 从文件读取凭据密钥 | `0003` | [#10417](https://github.com/makecindy/cindy/issues/10417) | [#10429](https://github.com/makecindy/cindy/pull/10429) | 触发维护者确认门（[#10437](https://github.com/makecindy/cindy/issues/10437)，标签 `awaiting-discussion`），等待维护者 Approve。`Windows unit tests` 是必需检查，之前失败在无关的不稳定用例（`maker-remote-ssh` 5s 超时）；2026-11-17 变基到 `fe0daea` 并强制推送重跑 CI，PR 下已说明。#10726（官方 Docker/NAS 部署）的分诊把它列为前置 |
 | Host 发行包缺 semver／picomatch | 已删除 | [#10587](https://github.com/makecindy/cindy/issues/10587) | [#10589](https://github.com/makecindy/cindy/pull/10589) | **已合入**（2026-11-15，`e1f4b6a`） |
 | 网页端启动检查要求 Claude Code+Codex | 已删除 | [#10597](https://github.com/makecindy/cindy/issues/10597) | [#10598](https://github.com/makecindy/cindy/pull/10598) | **已合入**（2026-11-15，`6b0baae`） |
-| Web 子路径部署 | `0004` | [#10614](https://github.com/makecindy/cindy/issues/10614) | 分支 `feat/web-base-path` | 分诊机器人欢迎提 PR；已按建议加同源路径校验，`0004` 改由该分支导出。PR 草稿 `docs/upstream/09-web-base-path/pr.md` 待审阅，手工验证待 VM 实测（与 P1 验收同一次安装） |
-| Web 首次登录 API | — | [#10600](https://github.com/makecindy/cindy/issues/10600) | 分支 `feat/host-web-login` | 2026-11-17 已在 issue 下认领第一阶段（社交／同区域 SSO、登出保留配对、登录后进程内装配运行时）；实现 `947fb15`，Linux 上 Host 535/535、类型检查通过；PR 草稿 `docs/upstream/07-host-web-login/pr.md` 待审阅，提交前需在 VM 上用真实账号验收。过渡方案仍是 Adapter 包装 CLI |
+| Web 子路径部署 | `0004` | [#10614](https://github.com/makecindy/cindy/issues/10614) | [#11047](https://github.com/makecindy/cindy/pull/11047) | 2026-11-17 已提交（变基到 `fe0daea`，单提交 `25d5629`）；fnOS VM 上在 `/app/cindy/` 下验收通过 |
+| Web 首次登录（第一阶段） | `0005` | [#10600](https://github.com/makecindy/cindy/issues/10600) | [#11048](https://github.com/makecindy/cindy/pull/11048) | 2026-11-17 已提交（单提交 `e6920ae`）：社交／同区域 SSO、登出保留配对、登录后进程内装配运行时；VM 首轮发现网页 shim 写死账号代次 1 导致模型目录卡在 `owner-pending`，已修。验证码登录、绑定留第二阶段，issue 保持打开。合入后 Adapter 可不再包装 CLI 登录（见下方待决） |
 | Host 登录结果非 ok 时失败 | — | [#10599](https://github.com/makecindy/cindy/issues/10599) | [#10704](https://github.com/makecindy/cindy/pull/10704) | **已合入**（2026-11-16，`a3028c0`）；只改 Host，没有本地补丁。`upstream.lock` 前移过 `a3028c0` 后，CLI 报错才会说明缺哪一步；微信未绑定手机号的账号仍需先在桌面版完成绑定 |
 | Host 手机号／邮箱登录 | — | 并入 [#10600](https://github.com/makecindy/cindy/issues/10600) | — | cn 提供手机号、微信、Apple，global 提供邮箱、Apple、Google（`/api/auth/providers`）；`cindy-host login` 只支持社交登录，已在 #10600 中提出 |
-| Host 本地模式（无账号） | — | [#10601](https://github.com/makecindy/cindy/issues/10601) | 分支 `fix/web-skip-login-unavailable` | 上游已确认缺陷（`readyForFix`），只修死入口：网页端隐藏「跳过登录」（按 `hostConnection.client === 'browser'` 判断，shim 的 Proxy 会合成未知方法）；实现 `a61f3c8`，Linux 上测试与类型检查通过、red 验证成立；`ui:check` 在无显示环境起不来，未目检；PR 草稿 `docs/upstream/08-host-local-mode/pr.md` 待审阅。Host 本地模式本身仍未做 |
+| Host 本地模式（无账号） | `0006` | [#10601](https://github.com/makecindy/cindy/issues/10601) | [#11049](https://github.com/makecindy/cindy/pull/11049) | 2026-11-17 已提交（`a61f3c8`）：只修死入口，网页端隐藏「跳过登录」；Host 本地模式本身仍未做 |
 | 只打包部分 agent 时模型目录失败 | 已删除 | [#10640](https://github.com/makecindy/cindy/issues/10640) | [#10642](https://github.com/makecindy/cindy/pull/10642) | **已合入**（2026-11-15，`ae78647`）；`upstream.lock` 已移到 `ae78647`。PR 的手工验证未补，合入前未要求 |
 | 模型选择器崩溃（`modelGroups.get` 返回 null） | 已删除 | [#10641](https://github.com/makecindy/cindy/issues/10641) | [#10643](https://github.com/makecindy/cindy/pull/10643) | **已合入**（2026-11-15，`dcecfa5`） |
-| 网页端添加自带 Key 的供应商 | — | [#10644](https://github.com/makecindy/cindy/issues/10644) | 分支 `feat/host-custom-providers` | 维护者未答复路线，2026-11-17 按分诊的方案 A 认领并实现第一个 PR（`create` + `models-fetch`）：Host 复用 Desktop 的 `registerProviderHandlers`，先拆出 `providerHandlers.desktop.ts` 断开 Electron 依赖（`120186e` refactor + `10d381c` feat）；Linux 上 Host 525/525、Desktop 定向与 related 测试、类型检查均通过；PR 草稿 `docs/upstream/12-host-custom-providers/pr.md` 待审阅，提交前需在 VM 上用 DeepSeek Key 验收 |
+| 网页端添加自带 Key 的供应商 | `0007` | [#10644](https://github.com/makecindy/cindy/issues/10644) | [#11050](https://github.com/makecindy/cindy/pull/11050) | 2026-11-17 已提交（`120186e` refactor + `10d381c` feat，只做 create 与 models-fetch）；VM 上 DeepSeek 添加、拉取模型、流式回复、重启后保持均通过。update／delete／disconnect 留待后续 PR |
 
-流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<序号>-<主题>/`（已合入或关闭的移到 `archive/`），经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的 `fnos-integration` 分支从 `upstream.lock` 的 commit 起按补丁编号依次叠加 #10419（`0002`）、#10429（`0003`）、`feat/web-base-path`（`0004`）后逐段导出，必须与 PR 代码一致。
+流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<序号>-<主题>/`（已合入或关闭的移到 `archive/`），经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的集成分支从 `upstream.lock` 的 commit 起按补丁编号依次合入 #10429（`0003`）、#11047（`0004`）、#11048（`0005`）、#11049（`0006`）、#11050（`0007`），逐段导出每个合并提交，必须与 PR 代码一致。几个 PR 都改了网页 shim，合并时的冲突解法写在集成分支的合并提交里；任何一个 PR 合入后，其余的变基并重新导出。
 
 ## 暂缓的决定
 

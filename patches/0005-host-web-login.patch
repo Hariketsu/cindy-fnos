@@ -1,0 +1,1316 @@
+Subject: host: sign in and sign in again from the web client
+
+Why: the standalone Host only signs in through the cindy-host login CLI with the
+Host stopped. The paired browser now uses the original login page: social and
+same-region SSO sign-in, runtime assembled in-process, pairing kept on sign-out.
+The web shim also reports the Host's real owner generation instead of a fixed 1,
+which left the model catalog pending after an in-process sign-in (found on
+fnOS). Same code as the upstream PR, merged after 0004 (the logout redirect
+that 0004 prefixes is removed here).
+Upstream: issue https://github.com/makecindy/cindy/issues/10600, PR https://github.com/makecindy/cindy/pull/11048
+Remove when: the PR is merged and upstream.lock moves past it.
+
+diff --git a/apps/host/src/auth/login.mjs b/apps/host/src/auth/login.mjs
+index 9d99f6abe5..613d4eeb9e 100644
+--- a/apps/host/src/auth/login.mjs
++++ b/apps/host/src/auth/login.mjs
+@@ -79,6 +79,11 @@ function listenOnLoopback(server) {
+   });
+ }
+ 
++export function persistHostLoginSession({ store, region, refreshToken, deviceId }) {
++  store.write(AUTH_SESSION_KEY, deviceId ? serializeHostSession(region, refreshToken, deviceId)
++    : serializeAuthSessionRecord(region, refreshToken));
++}
++
+ /**
+  * @param {{
+  *   client: any,
+@@ -105,7 +110,7 @@ export async function runHostLogin(deps) {
+ 
+   const pair = await deps.client.exchangeAuthorizationCode(authorization.code, verifier);
+   if (pair?.status !== 'ok') throw new Error(unfinishedLoginMessage(pair));
+-  deps.store.write(AUTH_SESSION_KEY, deps.deviceId ? serializeHostSession(deps.region, pair.refreshToken, deps.deviceId) : serializeAuthSessionRecord(deps.region, pair.refreshToken));
++  persistHostLoginSession({ ...deps, refreshToken: pair.refreshToken });
+   return { authenticated: true, realm: deps.region, method: method.providerOrConnectionId ?? method.type };
+ }
+ 
+diff --git a/apps/host/src/auth/login.test.mjs b/apps/host/src/auth/login.test.mjs
+index e88474e9a7..94958ff93b 100644
+--- a/apps/host/src/auth/login.test.mjs
++++ b/apps/host/src/auth/login.test.mjs
+@@ -1,7 +1,7 @@
+ import assert from 'node:assert/strict';
+ import test from 'node:test';
+ 
+-import { parseAuthSessionRecord, serializeAuthSessionRecord } from '@cindy/auth-client';
++import { AuthApiError, parseAuthSessionRecord, serializeAuthSessionRecord } from '@cindy/auth-client';
+ 
+ import { AUTH_SESSION_KEY } from '../../../desktop/src/main/authCredentialKeys.ts';
+ import { runHostLogin } from './login.mjs';
+@@ -21,7 +21,7 @@ function fakeClient(t, captured) {
+       captured.url = { input };
+       return `https://auth.example/authorize?state=${input.state}`;
+     },
+-    pollDesktopAuthorization: async () => ({ status: 'ok', code: 'auth-code' }),
++    pollDesktopAuthorization: async secret => { captured.pollSecret = secret; return { status: 'ok', code: 'auth-code' }; },
+     exchangeAuthorizationCode: async (code, verifier) => {
+       captured.exchange = { code, verifier };
+       return { status: 'ok', [ACCESS]: 'bearer', [REFRESH]: 'rotated' };
+@@ -88,3 +88,167 @@ test('reports a login outcome that needs another step instead of a missing token
+     assert.equal(store.records.size, 0);
+   }
+ });
++
++// #10600: web login must complete without restarting Host. CLI tests never
++// exercised interactive outcomes, cancellation or authenticated controllers.
++// Unit: fake auth-server only; real service entry, PKCE and callback polling.
++const { createHostWebLogin } = await import('./web-login.ts');
++const { createHostService } = await import('../service.mjs');
++const { setImmediate: nextTurn } = await import('node:timers/promises');
++const membership = { id: 'owner-web', displayName: 'Test', kind: 'personal', role: 'owner', email: null, orgId: null, orgName: null };
++function webLogin(overrides = {}) {
++  const saved = [];
++  const captured = {};
++  const client = {
++    ...fakeClient(null, captured),
++    getProviders: async () => ({ region: 'global', attribution: 'email', email: true, phone: true, social: ['google'] }),
++    exchangeAuthorizationCode: async (code, verifier) => {
++      captured.exchange = { code, verifier };
++      return { status: 'ok', membership, [ACCESS]: 'invalid-access', [REFRESH]: 'invalid-refresh' };
++    },
++    ...overrides,
++  };
++  const login = createHostWebLogin({ client, region: 'global', hostedCallbackUrl: 'https://auth.example/callback',
++    complete: async value => { saved.push(value); } });
++  return { login, saved, captured };
++}
++const startGoogle = { type: 'start-browser', kind: 'social', providerOrConnectionId: 'google', label: 'Google' };
++async function settled(login) {
++  for (let i = 0; i < 30; i++) {
++    const result = await login.getLoginState();
++    if (result.state?.step !== 'browser-redirect') return result;
++    await nextTurn();
++  }
++  assert.fail('Login did not settle');
++}
++
++test('web login exposes usable methods and completes hosted authorization without exposing credentials', async () => {
++  const { login, saved, captured } = webLogin();
++  const entry = await login.getLoginState();
++  assert.equal(entry.state.step, 'identifier');
++  assert.deepEqual(entry.state.providers.social, ['google']);
++  assert.equal(entry.state.providers.email, false);
++  assert.equal(entry.state.providers.phone, false);
++  const started = await login.dispatchLoginAction(startGoogle, 'controller-a');
++  assert.match(started.authorizeUrl, /^https:\/\/auth.example\/authorize/);
++  assert.equal((await settled(login)).state.step, 'completed');
++  assert.equal(saved[0].membership.id, 'owner-web');
++  assert.match(captured.exchange.verifier, /^[A-Za-z0-9_-]{43}$/);
++  const publicState = JSON.stringify([started, await login.getLoginState()]);
++  assert.equal(publicState.includes('invalid-refresh'), false);
++  assert.equal(publicState.includes('invalid-access'), false);
++  const snapshot = await login.getLoginState();
++  assert.equal(snapshot.authorizeUrl, undefined);
++  assert.equal(JSON.stringify(snapshot).includes(captured.exchange.verifier), false);
++  assert.equal(JSON.stringify(snapshot).includes(captured.url.input.state), false);
++  assert.equal(JSON.stringify(snapshot).includes(captured.pollSecret), false);
++});
++
++test('web login validates methods and supports account selection without exposing tickets', async () => {
++  const { login, saved } = webLogin({
++    exchangeAuthorizationCode: async () => ({ status: 'select_account', loginTicket: 'invalid-private-ticket', accounts: [membership] }),
++    selectAccount: async (ticket, id) => {
++      assert.equal(ticket, 'invalid-private-ticket'); assert.equal(id, membership.id);
++      return { status: 'ok', membership, [ACCESS]: 'invalid-access', [REFRESH]: 'invalid-refresh' };
++    },
++  });
++  assert.equal((await login.dispatchLoginAction({ ...startGoogle, providerOrConnectionId: 'disabled' }, 'controller-a')).success, false);
++  await login.dispatchLoginAction(startGoogle, 'controller-a');
++  const selection = await settled(login);
++  assert.equal(selection.state.step, 'account-selection');
++  assert.equal(JSON.stringify(selection).includes('invalid-private-ticket'), false);
++  assert.equal((await login.dispatchLoginAction({ type: 'select-account', accountId: membership.id }, 'controller-b')).code, 'AUTH_BUSY');
++  assert.equal((await login.dispatchLoginAction({ type: 'select-account', accountId: 'unknown' }, 'controller-a')).success, false);
++  assert.equal(saved.length, 0);
++  assert.equal((await login.dispatchLoginAction({ type: 'select-account', accountId: membership.id }, 'controller-a')).state.step, 'completed');
++  assert.equal(saved.length, 1);
++});
++
++test('web login cancellation discards a late callback and permits another controller', async () => {
++  let callback;
++  const { login, saved } = webLogin({ pollDesktopAuthorization: () => new Promise(resolve => { callback = resolve; }) });
++  await login.dispatchLoginAction(startGoogle, 'controller-a');
++  const cancel = login.dispatchLoginAction({ type: 'cancel-browser' }, 'controller-a');
++  callback({ status: 'ok', code: 'invalid-late-code' });
++  assert.equal((await cancel).state.step, 'identifier');
++  assert.equal(saved.length, 0);
++  assert.equal((await login.dispatchLoginAction({ type: 'verify-code', kind: 'email', identifier: 'test@example.invalid', code: '000000' }, 'controller-b')).code, 'NOT_SUPPORTED');
++});
++
++test('web SSO discovery validates connections and keeps verification tickets on Host', async () => {
++  const connection = { connectionId: 'test-idp', protocol: 'oidc', connectionName: 'Test' };
++  const { login, saved } = webLogin({
++    discoverSsoOrg: async () => ({ region: 'global', orgName: 'Example', connections: [connection] }),
++    exchangeAuthorizationCode: async () => ({ status: 'sso_verification_required', verificationTicket: 'invalid-sso-ticket', channel: 'email', targetMasked: 't***' }),
++    requestSsoVerificationCode: async ticket => { assert.equal(ticket, 'invalid-sso-ticket'); },
++    verifySsoVerification: async (ticket, code) => {
++      assert.equal(ticket, 'invalid-sso-ticket'); assert.equal(code, '000000');
++      return { status: 'ok', membership, [ACCESS]: 'invalid-access', [REFRESH]: 'invalid-refresh' };
++    },
++  });
++  const discovered = await login.dispatchLoginAction({ type: 'discover-sso-org', org: 'example' }, 'controller-a');
++  assert.equal(discovered.state.methods[0].connectionId, 'test-idp');
++  await login.dispatchLoginAction({ type: 'start-browser', kind: 'sso', providerOrConnectionId: 'test-idp', label: 'Test' }, 'controller-a');
++  assert.equal((await settled(login)).state.step, 'sso-verification');
++  const requested = await login.dispatchLoginAction({ type: 'request-sso-verification-code' }, 'controller-a');
++  assert.equal(requested.state.codeRequested, true);
++  assert.equal(JSON.stringify(requested).includes('invalid-sso-ticket'), false);
++  assert.equal((await login.dispatchLoginAction({ type: 'verify-sso-verification', code: '000000' }, 'controller-a')).state.step, 'completed');
++  assert.equal(saved.length, 1);
++});
++
++test('web auth routes reject fabricated controller identities in the request body', async () => {
++  const { login } = webLogin();
++  const service = createHostService({ getLoginState: login.getLoginState, dispatchLoginAction: login.dispatchLoginAction });
++  assert.equal((await service('/api/auth/login-state')).body.state.step, 'identifier');
++  const body = { action: { type: 'reset' }, caller: 'forged' };
++  assert.equal((await service('/api/auth/login-action', body)).status, 403);
++  assert.equal((await service('/api/auth/login-action', body, { caller: 'authenticated' })).body.success, true);
++  assert.equal((await service('/api/auth/login-action', { action: { type: 'start-browser' } }, { caller: 'authenticated' })).body.code, 'INVALID_AUTH_ACTION');
++});
++
++
++test('web SSO discovers connections and completes its additional verification step', async () => {
++  const { login, saved } = webLogin({
++    discoverSsoOrg: async () => ({ region: 'global', orgName: 'Example', connections: [{ connectionId: 'example-idp', protocol: 'oidc', connectionName: 'Example' }] }),
++    exchangeAuthorizationCode: async () => ({ status: 'sso_verification_required', verificationTicket: 'invalid-private-sso', channel: 'email', targetMasked: 't***' }),
++    requestSsoVerificationCode: async ticket => assert.equal(ticket, 'invalid-private-sso'),
++    verifySsoVerification: async (ticket, code) => {
++      assert.equal(ticket, 'invalid-private-sso'); assert.equal(code, '123456');
++      return { status: 'ok', membership, [ACCESS]: 'invalid-access', [REFRESH]: 'invalid-refresh' };
++    },
++  });
++  const discovered = await login.dispatchLoginAction({ type: 'discover-sso-org', org: 'example' }, 'controller-a');
++  assert.equal(discovered.state.methods[0].connectionId, 'example-idp');
++  await login.dispatchLoginAction({ type: 'start-browser', kind: 'sso', providerOrConnectionId: 'example-idp', label: 'Example' }, 'controller-a');
++  assert.equal((await settled(login)).state.step, 'sso-verification');
++  const requested = await login.dispatchLoginAction({ type: 'request-sso-verification-code' }, 'controller-a');
++  assert.equal(requested.state.codeRequested, true);
++  assert.equal(JSON.stringify(requested).includes('invalid-private-sso'), false);
++  assert.equal((await login.dispatchLoginAction({ type: 'verify-sso-verification', code: '123456' }, 'controller-a')).state.step, 'completed');
++  assert.equal(saved.length, 1);
++});
++
++test('web login service refuses unauthenticated mutation contexts', async () => {
++  const invoke = createHostService({ dispatchLoginAction: () => assert.fail('unauthenticated action reached login') });
++  assert.equal((await invoke('/api/auth/login-action', { action: { type: 'reset' }, caller: 'forged' })).status, 403);
++});
++
++
++test('web login preserves the auth-server retry deadline in failure projections', async () => {
++  const retryAt = 2_000_000_000_000;
++  const { login } = webLogin({ getProviders: async () => { throw new AuthApiError('RATE_LIMITED', 429, 'Test limit', retryAt); } });
++  const result = await login.getLoginState();
++  assert.equal(result.code, 'RATE_LIMITED');
++  assert.equal(result.retryAt, retryAt);
++  assert.equal(result.state.retryAt, retryAt);
++});
++
++test('web login rejects a null request body through action validation', async () => {
++  const { login } = webLogin();
++  const invoke = createHostService({ dispatchLoginAction: (action, caller) => login.dispatchLoginAction(action, caller) });
++  const response = await invoke('/api/auth/login-action', null, { caller: 'controller-a' });
++  assert.equal(response.status, 200);
++  assert.equal(response.body.success, false);
++  assert.equal(response.body.code, 'INVALID_AUTH_ACTION');
++});
+diff --git a/apps/host/src/auth/web-login.ts b/apps/host/src/auth/web-login.ts
+new file mode 100644
+index 0000000000..8cb3093431
+--- /dev/null
++++ b/apps/host/src/auth/web-login.ts
+@@ -0,0 +1,123 @@
++import crypto from 'node:crypto';
++import { setTimeout as sleep } from 'node:timers/promises';
++import { AuthApiError, reduceAuthFlow, ssoOrgDiscoveryToMethods,
++  type CindyAuthClient, type AuthFlowState, type AuthRegion, type AuthSuccess,
++  type LoginOutcome, type LoginMethod, type ProviderConfig } from '@cindy/auth-client';
++import { parseDesktopLoginAction } from '../../../desktop/src/shared/authIpc.js';
++import { createDesktopPollCredentials, runHostedCallbackPolling } from '../../../desktop/src/main/authHostedCallback.js';
++
++/** One authenticated controller owns the pending tickets; only presentation state leaves Host. */
++export function createHostWebLogin(deps: {
++  client: CindyAuthClient; region: AuthRegion; hostedCallbackUrl: string;
++  complete(outcome: AuthSuccess, signal: AbortSignal): Promise<void>;
++}) {
++  let state: (AuthFlowState & { retryAt?: number }) | null = null;
++  let providerConfig: ProviderConfig | null = null;
++  let providersFlight: Promise<void> | null = null;
++  let controller: string | null = null;
++  let methods: LoginMethod[] = [];
++  let outcome: LoginOutcome | null = null;
++  let cancellation = new AbortController();
++  let flight: Promise<void> | null = null;
++  let pending: Promise<void> | null = null;
++  let finishPending: (() => void) | undefined;
++  const result = () => state?.step === 'error'
++    ? { success: false as const, code: state.code, state, ...(state.retryAt !== undefined ? { retryAt: state.retryAt } : {}) }
++    : { success: true as const, state };
++  const fail = (error: unknown) => {
++    const code = error instanceof AuthApiError ? error.code : 'AUTH_REQUEST_FAILED';
++    state = { ...reduceAuthFlow(state, { type: 'failed', code, recoverTo: 'identifier' }),
++      ...(error instanceof AuthApiError && error.retryAt !== undefined ? { retryAt: error.retryAt } : {}) };
++    return result();
++  };
++  async function loadProviders() {
++    if (!providersFlight) providersFlight = deps.client.getProviders().then(providers => {
++      providerConfig = providers;
++      // Declare captcha-backed login unavailable; the existing renderer still shows its identifier input.
++      state = reduceAuthFlow(state, { type: 'providers-loaded', providers: { ...providers, email: false, phone: false } });
++    }).finally(() => { providersFlight = null; });
++    await providersFlight;
++  }
++  async function accept(next: LoginOutcome, signal: AbortSignal) {
++    signal.throwIfAborted();
++    if (next.status === 'binding_required') throw new AuthApiError('NOT_SUPPORTED', 400, 'Binding is unavailable');
++    if (next.status === 'ok') {
++      await deps.complete(next, signal);
++      signal.throwIfAborted();
++    }
++    outcome = next.status === 'ok' ? null : next;
++    state = reduceAuthFlow(state, { type: 'outcome', outcome: next });
++  }
++  async function cancel() {
++    cancellation.abort();
++    await Promise.all([flight, pending]);
++    cancellation = new AbortController();
++    outcome = null; methods = []; state = null; controller = null;
++  }
++  return {
++    async getLoginState() {
++      try { if (!state) await loadProviders(); return result(); }
++      catch (error) { return fail(error); }
++    },
++    async dispatchLoginAction(value: unknown, caller: string) {
++      if (!caller) throw new Error('Authenticated login controller is required');
++      const action = parseDesktopLoginAction(value);
++      if (!action) return { success: false, code: 'INVALID_AUTH_ACTION', state };
++      if (controller && controller !== caller) return { success: false, code: 'AUTH_BUSY', state: null };
++      if (['reset', 'back', 'cancel-browser'].includes(action.type)) {
++        await cancel();
++        try { await loadProviders(); return result(); } catch (error) { return fail(error); }
++      }
++      if (pending || flight) return { success: false, code: 'AUTH_BUSY', state };
++      controller = caller;
++      pending = new Promise(resolve => { finishPending = resolve; });
++      const signal = cancellation.signal;
++      try {
++        if (!state) await loadProviders();
++        signal.throwIfAborted();
++        if (action.type === 'discover-sso-org') {
++          const discovery = await deps.client.discoverSsoOrg(action.org);
++          signal.throwIfAborted();
++          if (discovery.region !== deps.region) throw new AuthApiError('ORG_REALM_UNAVAILABLE', 400, 'SSO region differs from Host');
++          methods = ssoOrgDiscoveryToMethods(discovery);
++          state = reduceAuthFlow(state, { type: 'discovery-loaded', email: '', methods });
++        } else if (action.type === 'start-browser') {
++          if (action.kind === 'social' ? !providerConfig?.social.some(provider => provider === action.providerOrConnectionId)
++            : !methods.some(method => method.type === 'sso' && method.connectionId === action.providerOrConnectionId)) {
++            throw new AuthApiError('INVALID_AUTH_ACTION', 400, 'Login method is unavailable');
++          }
++          const verifier = crypto.randomBytes(32).toString('base64url');
++          const { clientState, pollSecret } = createDesktopPollCredentials();
++          const authorizeUrl = deps.client.buildAuthorizeUrl({ kind: action.kind,
++            providerOrConnectionId: action.providerOrConnectionId, redirectUri: deps.hostedCallbackUrl,
++            codeChallenge: crypto.createHash('sha256').update(verifier).digest('base64url'), state: clientState });
++          state = reduceAuthFlow(state, { type: 'browser-started', label: action.label });
++          flight = (async () => {
++            const callback = await runHostedCallbackPolling({
++              poll: () => deps.client.pollDesktopAuthorization(pollSecret, { signal }),
++              sleep: ms => sleep(ms, undefined, { signal }).then(() => {}),
++              now: Date.now, signal, timeoutMs: 5 * 60_000,
++            });
++            signal.throwIfAborted();
++            if ('error' in callback) throw new AuthApiError(callback.error, 400, 'Browser login failed');
++            await accept(await deps.client.exchangeAuthorizationCode(callback.code, verifier), signal);
++          })().catch(error => { if (!signal.aborted) fail(error); }).finally(() => { flight = null; });
++          return { ...result(), authorizeUrl };
++        } else if (action.type === 'select-account' && outcome?.status === 'select_account') {
++          if (!outcome.accounts.some(account => account.id === action.accountId)) throw new AuthApiError('INVALID_AUTH_ACTION', 400, 'Unknown account');
++          await accept(await deps.client.selectAccount(outcome.loginTicket, action.accountId), signal);
++        } else if (action.type === 'request-sso-verification-code' && outcome?.status === 'sso_verification_required') {
++          await deps.client.requestSsoVerificationCode(outcome.verificationTicket);
++          signal.throwIfAborted();
++          state = reduceAuthFlow(state, { type: 'sso-verification-code-requested', channel: outcome.channel, targetMasked: outcome.targetMasked });
++        } else if (action.type === 'verify-sso-verification' && outcome?.status === 'sso_verification_required') {
++          await accept(await deps.client.verifySsoVerification(outcome.verificationTicket, action.code), signal);
++        } else throw new AuthApiError('NOT_SUPPORTED', 400, 'Login action is unavailable');
++        return result();
++      } catch (error) { return fail(error); }
++      finally { finishPending?.(); pending = null; }
++    },
++    async cancel() { await cancel(); },
++    async releaseCaller(caller: string) { if (controller === caller) await cancel(); },
++  };
++}
+diff --git a/apps/host/src/main.ts b/apps/host/src/main.ts
+index b69a85b843..ed91faa4ed 100644
+--- a/apps/host/src/main.ts
++++ b/apps/host/src/main.ts
+@@ -93,6 +93,9 @@ import type { Effort, PermissionMode } from '@cindy/maker-core';
+ import { createRequire } from 'node:module';
+ import { readAuthEndpoints } from './auth/endpoints.mjs';
+ import { logoutHostSession } from './auth/logout.mjs';
++import { createHostWebLogin } from './auth/web-login.js';
++import { getOrCreateHostDeviceId } from './auth/device-identity.mjs';
++import { persistHostLoginSession } from './auth/login.mjs';
+ import { listInstalledPlugins } from './plugins.mjs';
+ import { createHostGhostManager } from './plugins-installed.ts';
+ import { initializeHostPluginRemoteAuthorization } from './plugins/remote-authorization.js';
+@@ -351,6 +354,8 @@ let remoteIdentityReady = false;
+ let currentDeviceId: string | null = null;
+ let deviceLink: ReturnType<typeof createHostDeviceLink> | null = null;
+ let activeOwner: string | null = null;
++// Signing out does not permit switching this running process to another owner.
++let signedInOwner: string | null = null;
+ let closeStorage: (() => Promise<void>) | null = null;
+ let sessionStorage: OwnerSessionStorage | null = null;
+ let runtimeLease: HostRuntimeLease | null = null;
+@@ -411,8 +416,9 @@ function invalidateHostSession(_reason: string): Promise<void> {
+       commitVolatileAppSession('signed-out', null, true);
+       release();
+       runtime.state = 'uninitialized'; runtime.owner = null; runtime.storage = 'unopened';
+-      runtime.detail = 'Sign-in expired. Stop the Host, sign in again, then start it.';
++      runtime.detail = 'Sign-in expired.';
+       eventHub.clear();
++      eventHub.publish({ type: 'auth_changed', ...projectAuthState() });
+     }
+   }).finally(() => { invalidation = null; });
+   return invalidation;
+@@ -486,13 +492,13 @@ let account: { authenticated: boolean; realm: string | null; error?: string } =
+  * Initialize storage only after verifying the signed-in membership. An explicit
+  * owner selects a profile; it is never evidence of a successful login.
+  */
+-async function ensureRuntime(ownerId: string): Promise<void> {
++async function ensureRuntime(ownerId: string, heldLease?: HostRuntimeLease): Promise<void> {
+   if (activeOwner !== null) {
+     if (activeOwner === ownerId) return;
+     throw new Error('owner switch is not supported while the host is running');
+   }
+   const dataDir = resolveHostDataDir();
+-  const lease = acquireHostRuntimeLease(dataDir, ownerId);
++  const lease = heldLease ?? acquireHostRuntimeLease(dataDir, ownerId);
+   if (!lease.held) {
+     runtime.state = 'blocked';
+     runtime.owner = ownerId;
+@@ -799,6 +805,8 @@ async function ensureRuntime(ownerId: string): Promise<void> {
+   }
+   await plugins.reconcile();
+   await pluginGateway.refresh();
++  signedInOwner = ownerId;
++  runtime.detail = undefined;
+   runtime.state = 'ready';
+ }
+ 
+@@ -1063,6 +1071,65 @@ const ipcRoute = createHostIpcRoute({
+   log: event => (event.outcome === 'ok' ? ipcLog.debug('ipc call', event) : ipcLog.warn('ipc call', event)),
+ });
+ 
++async function activateAccountRuntime(ownerId: string, lease?: HostRuntimeLease): Promise<void> {
++  await ensureRuntime(ownerId, lease);
++  authClosed = false;
++  server.resumeOwnerRequests();
++  startDeviceLink();
++  if (account.authenticated) schedulePeriodicRefresh();
++  eventHub.clear();
++  eventHub.publish({ type: 'auth_changed', ...projectAuthState() });
++}
++
++let webLogin: Promise<ReturnType<typeof createHostWebLogin>> | null = null;
++function getWebLogin() {
++  return webLogin ??= (async () => {
++    const realm = resolveHostRegion() as 'cn' | 'global';
++    const endpoints = readAuthEndpoints(realm);
++    const hostedCallbackUrl = endpoints.authDesktopCallbackUrl;
++    if (!hostedCallbackUrl) throw new Error('Host web login requires a hosted authorization callback');
++    const store = await createCredentialStore({ userDataDir: resolveHostDataDir(),
++      keyringApplication: process.env.CINDY_HOST_KEYRING_APPLICATION?.trim() || undefined });
++    const deviceId = getOrCreateHostDeviceId(resolveHostDataDir());
++    const client = new CindyAuthClient({ baseUrl: endpoints.authApiBaseUrl, region: realm,
++      deviceId, clientType: 'desktop', fetch: (input, init) => hostAuthFetch(input, init) });
++    return createHostWebLogin({ client, region: realm, hostedCallbackUrl,
++      complete: async (outcome, signal) => {
++        await startup;
++        if (shuttingDown) throw new Error('Host is stopping');
++        const me = await client.getMe(outcome.accessToken);
++        signal.throwIfAborted();
++        const ownerId = me.membership.id;
++        if (ownerId !== outcome.membership.id || (signedInOwner && signedInOwner !== ownerId)) {
++          throw new Error('owner switch is not supported while the host is running');
++        }
++        if (account.authenticated) throw new Error('Host is already signed in');
++        const lease = acquireHostRuntimeLease(resolveHostDataDir(), ownerId);
++        if (!lease.held) throw new Error('Another process owns this Host profile');
++        try {
++          await withCrossProcessLock(path.join(resolveHostDataDir(), '.cindy-auth-accounts-v1.lock'),
++            { label: 'auth-account-vault', waitMs: 5000 }, async lock => {
++              if (!lock.held) throw new Error('Saved account credentials are busy; retry login');
++              signal.throwIfAborted();
++              persistHostLoginSession({ store, region: realm, refreshToken: outcome.refreshToken, deviceId });
++            });
++          currentSessionToken = outcome.accessToken;
++          currentDeviceId = deviceId;
++          remoteIdentityReady = true;
++          accountUser = { ...mapMembershipToAuthUser(me.membership, me.passportId), orgSlug: decodeAccessTokenOrgSlug(outcome.accessToken) };
++          account = { authenticated: true, realm };
++          await activateAccountRuntime(ownerId, lease);
++        } catch (error) {
++          if (runtimeLease !== lease) lease.release();
++          await disposeOwnerRuntime();
++          commitVolatileAppSession('signed-out', null, true);
++          throw error;
++        }
++      },
++    });
++  })().catch(error => { webLogin = null; throw error; });
++}
++
+ const serverDeps = {
+   ipcRoute,
+   browserBackend: (handler: keyof NonNullable<typeof platformTools>['browserSettings'], payload: unknown) => {
+@@ -1087,6 +1154,7 @@ const serverDeps = {
+   // it boots with is the same one the Desktop renders — never a host-side copy.
+   bootValues: () => {
+     const profile = currentProfileSettings();
++    const auth = projectAuthState();
+     return {
+       appVersion: layout.version,
+       platform: process.platform,
+@@ -1094,9 +1162,7 @@ const serverDeps = {
+       locale: Intl.DateTimeFormat().resolvedOptions().locale,
+       voiceInput: profile.voiceInput,
+       harness: harnessStatus(),
+-      auth: account.authenticated && accountUser
+-        ? { user: accountUser, ownerId: runtime.owner }
+-        : {},
++      auth: { user: auth.user, ownerId: auth.dataOwnerId, ownerGeneration: auth.ownerGeneration },
+       appearance: profile.appearance,
+       layout: profile.layout,
+       sidebar: profile.sidebar,
+@@ -1159,6 +1225,13 @@ const serverDeps = {
+     user: accountUser,
+   }),
+   getAuthState: async () => { await startup; return projectAuthState(); },
++  getLoginState: async () => (await getWebLogin()).getLoginState(),
++  dispatchLoginAction: async (action: unknown, caller: string) => {
++    await startup;
++    if (invalidation) await invalidation;
++    if (shuttingDown || account.authenticated) throw new Error('Host login is unavailable');
++    return (await getWebLogin()).dispatchLoginAction(action, caller);
++  },
+   agentAuthState: async (kind: 'claude-code' | 'codex' | 'pi') => {
+     if (!HARNESS_KINDS.includes(kind)) throw new Error('Invalid agent kind');
+     if (!agentGraph?.instances[kind]) return { authenticated: false, errorReason: 'runtime_unavailable' };
+@@ -1172,13 +1245,15 @@ const serverDeps = {
+     if (!agentAuth) throw new Error('Agent runtime is unavailable');
+     return agentAuth.invoke(channel, args, caller);
+   },
+-  releaseAuthCaller: (caller: string) => { agentAuth?.releaseCaller(caller); hostConfirmations?.cancelCaller(caller); },
++  releaseAuthCaller: (caller: string) => { agentAuth?.releaseCaller(caller); hostConfirmations?.cancelCaller(caller);
++    void webLogin?.then(login => login.releaseCaller(caller)); },
+   connectController: (caller: string, send: Parameters<NonNullable<typeof hostConfirmations>['connect']>[1]) =>
+     hostConfirmations?.connect(caller, send),
+   resolvePluginConfirmation: (caller: string, kind: 'confirm' | 'install', requestId: string, confirmed: boolean) =>
+     hostConfirmations?.resolve(caller, kind, requestId, confirmed) ?? false,
+   cancelPendingAuth: async () => {
+     agentAuth?.close();
++    await (await webLogin)?.cancel();
+     await providerConfig?.cancelLogins();
+   },
+   listRunningSessions: (options: unknown) => listRunningSessions(agentGraph?.maker, options),
+@@ -1756,9 +1831,8 @@ server.listen(PORT, '127.0.0.1', () => {
+       accountUser = initialUser;
+       account = { authenticated: true, realm: account.realm };
+     }
+-    await ensureRuntime(owner);
+-    startDeviceLink();
+-    if (account.authenticated) { schedulePeriodicRefresh(); return; }
++    await activateAccountRuntime(owner);
++    if (account.authenticated) return;
+     const state = await readAdoptedSessionState({
+       userDataDir: resolveHostDataDir(),
+       keyringApplication: process.env.CINDY_HOST_KEYRING_APPLICATION?.trim() || undefined,
+diff --git a/apps/host/src/server.mjs b/apps/host/src/server.mjs
+index c8f6dd8417..10a9532b6f 100644
+--- a/apps/host/src/server.mjs
++++ b/apps/host/src/server.mjs
+@@ -93,13 +93,13 @@ export function createHostServer(input) {
+   const ownerRequests = new Set();
+   let logoutFlight;
+   let authDrain;
+-  const cancelPendingAuth = () => authDrain ??= Promise.resolve().then(() => deps.cancelPendingAuth?.());
++  const cancelPendingAuth = () => authDrain ??= Promise.resolve().then(() => deps.cancelPendingAuth?.())
++    .finally(() => { authDrain = undefined; });
+   const unsubscribeSessions = deps.webAuth.onSessionRevoke?.(caller => deps.releaseAuthCaller?.(caller));
+   const logout = () => {
+     if (logoutFlight) return logoutFlight;
+-    // Revoke browser streams immediately and drain existing database callers
++    // Keep browser pairing while draining existing database callers
+     // before the owner runtime closes. Concurrent sign-out clicks share a result.
+-    deps.webAuth.clear();
+     deps.platformClient?.()?.close();
+     logoutFlight = cancelPendingAuth().then(() => Promise.all([...ownerRequests])).then(() => deps.logout())
+       .finally(() => { logoutFlight = undefined; });
+@@ -142,7 +142,7 @@ export function createHostServer(input) {
+         return;
+       }
+       const ownerRequest = (url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/auth/') && url.pathname !== '/api/me')
+-        || ['/control/platform', '/control/remote', '/events', '/chat', '/sessions', '/plugins'].includes(url.pathname) || url.pathname.startsWith('/sessions/');
++        || ['/control/platform', '/control/remote', '/chat', '/sessions', '/plugins'].includes(url.pathname) || url.pathname.startsWith('/sessions/');
+       if (ownerRequest) {
+         if (ownerPaused || logoutFlight || deps.isOwnerReady?.() === false) {
+           send(response, 409, { error: 'owner_runtime_unavailable' }); return;
+@@ -230,9 +230,12 @@ export function createHostServer(input) {
+           send(response, 401, { error: 'unauthorized' }); return;
+         }
+         const body = await readJson(request);
++        if (url.pathname === '/api/auth/login-action' && (logoutFlight || stopping)) {
++          send(response, 409, { error: 'owner_runtime_unavailable' }); return;
++        }
+         if (url.pathname === '/api/auth/logout') {
+           const result = await logout();
+-          send(response, 200, result, { 'set-cookie': 'cindy_host_web=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0' });
++          send(response, 200, result);
+           return;
+         }
+         const caller = deps.webAuth.caller?.(request.headers.cookie)
+@@ -267,20 +270,26 @@ export function createHostServer(input) {
+         response.write(': connected\n\n');
+         response.flush?.();
+ 
++        // Signed-out controllers need auth changes, never owner data or replay.
++        const ownerEventsVisible = () => !ownerPaused && !logoutFlight && deps.isOwnerReady?.() !== false;
++        const initiallyVisible = ownerEventsVisible();
++        let hiddenEvents = false;
++        const visible = event => event.type === 'auth_changed' || ownerEventsVisible();
+         const sinceHeader = request.headers['last-event-id'];
+         const sinceQuery = url.searchParams.get('since') ?? url.searchParams.get('lastEventId') ?? url.searchParams.get('after');
+         const sinceVal = sinceHeader ?? sinceQuery;
+         if (versioned) {
+-          const replay = deps.events.replay({ since: sinceVal, runtime: url.searchParams.get('runtime') });
++          const replay = deps.events.replay(initiallyVisible
++            ? { since: sinceVal, runtime: url.searchParams.get('runtime') } : {});
+           const { events, ...cursor } = replay;
+           response.write(`data: ${JSON.stringify({ type: 'host_stream', phase: 'start', ...cursor })}\n\n`);
+-          for (const item of events) response.write(`id: ${item.seq}\ndata: ${JSON.stringify(item)}\n\n`);
++          for (const item of events.filter(visible)) response.write(`id: ${item.seq}\ndata: ${JSON.stringify(item)}\n\n`);
+           response.write(`data: ${JSON.stringify({ type: 'host_stream', phase: 'ready', ...cursor })}\n\n`);
+-        } else if (sinceVal !== null && sinceVal !== undefined && sinceVal !== '') {
++        } else if (initiallyVisible && sinceVal !== null && sinceVal !== undefined && sinceVal !== '') {
+           const sinceSeq = parseInt(sinceVal, 10);
+           if (!Number.isNaN(sinceSeq) && typeof deps.events.getEventsSince === 'function') {
+             const missed = deps.events.getEventsSince(sinceSeq);
+-            for (const item of missed) {
++            for (const item of missed.filter(visible)) {
+               const idLine = item.seq != null ? `id: ${item.seq}\n` : '';
+               response.write(`${idLine}data: ${JSON.stringify(item)}\n\n`);
+             }
+@@ -291,6 +300,12 @@ export function createHostServer(input) {
+         const unsubscribe = deps.events.subscribe((event) => {
+           if (response.writableEnded) return;
+           if (!isWebAuthorized(request, deps)) { response.end(); return; }
++          // Resume with the existing snapshot handshake instead of creating a cursor gap.
++          if (ownerEventsVisible() !== initiallyVisible || (hiddenEvents && event.type === 'auth_changed')) {
++            response.end(); return;
++          }
++          if (event.type === 'auth_changed') syncController();
++          if (!visible(event)) { hiddenEvents = true; return; }
+           const idLine = event.seq != null ? `id: ${event.seq}\n` : '';
+           response.write(`${idLine}data: ${JSON.stringify(event)}\n\n`);
+           response.flush?.();
+@@ -300,12 +315,21 @@ export function createHostServer(input) {
+         // resurrect an old permission dialog.
+         const confirmationCaller = deps.webAuth.caller?.(request.headers.cookie)
+           ?? (isAuthorized(request.headers.authorization, deps.token) ? `local-api:${deps.instanceId}` : null);
+-        const disconnectController = confirmationCaller && versioned && url.searchParams.get('confirmations') === '1' ? deps.connectController?.(confirmationCaller, event => {
+-          if (response.writableEnded || response.destroyed || response.writableLength > HOST_PROMPT_BUFFER_BYTES || !isWebAuthorized(request, deps)) return false;
+-          const written = response.write(`data: ${JSON.stringify({ type: 'host_prompt', channel: event.channel, payload: event.payload })}\n\n`);
+-          response.flush?.();
+-          return written || response.writableLength === 0;
+-        }) : undefined;
++        let disconnectController;
++        const syncController = () => {
++          const allowed = confirmationCaller && versioned && url.searchParams.get('confirmations') === '1'
++            && visible({ type: 'host_prompt' });
++          // Periodic auth refresh must not cancel an existing confirmation.
++          if (allowed && disconnectController) return;
++          disconnectController?.();
++          disconnectController = allowed ? deps.connectController?.(confirmationCaller, event => {
++              if (!visible({ type: 'host_prompt' }) || response.writableEnded || response.destroyed || response.writableLength > HOST_PROMPT_BUFFER_BYTES || !isWebAuthorized(request, deps)) return false;
++              const written = response.write(`data: ${JSON.stringify({ type: 'host_prompt', channel: event.channel, payload: event.payload })}\n\n`);
++              response.flush?.();
++              return written || response.writableLength === 0;
++          }) : undefined;
++        };
++        syncController();
+         const keepAlive = setInterval(() => {
+           if (response.writableEnded) return;
+           if (!isWebAuthorized(request, deps)) { response.end(); return; }
+@@ -416,11 +440,10 @@ export function createHostServer(input) {
+     ownerPaused = true;
+     deps.platformClient?.()?.close();
+     for (const socket of platformSockets.clients) socket.terminate();
+-    deps.webAuth.clear();
+     return Promise.all([cancelPendingAuth(), Promise.allSettled([...ownerRequests])]);
+   };
+   server.once('close', () => unsubscribeSessions?.());
+-  return Object.assign(server, { stopAccepting, pauseOwnerRequests });
++  return Object.assign(server, { stopAccepting, pauseOwnerRequests, resumeOwnerRequests: () => { ownerPaused = false; } });
+ }
+ 
+ /** Bound request memory before parsing; aborted requests must not hang forever. */
+diff --git a/apps/host/src/server.test.mjs b/apps/host/src/server.test.mjs
+index 366867b8f0..92aea9ef56 100644
+--- a/apps/host/src/server.test.mjs
++++ b/apps/host/src/server.test.mjs
+@@ -10,6 +10,7 @@ import { createPlatformClientBridge } from './platform/client-bridge.ts';
+ import { createHostPlatformRpc } from '@cindy/maker-shared/host-platform-rpc';
+ 
+ import { createHostServer } from './server.mjs';
++import { createEventHub } from './events.mjs';
+ 
+ const TOKEN = 'test-token-value';
+ 
+@@ -250,18 +251,18 @@ test('expired browser sessions release only their own authenticated controller',
+ 
+ // Account teardown must not close storage underneath another request or accept
+ // more private work while two clients are concurrently signing out.
+-test('logout drains owner requests, revokes streams and serializes concurrent callers', async (t) => {
++test('logout drains owner requests, keeps pairing and serializes concurrent callers', async (t) => {
+   let enter;
+   let release;
+   const entered = new Promise(resolve => { enter = resolve; });
+   const blocked = new Promise(resolve => { release = resolve; });
+   let signOuts = 0;
+-  let revoked;
+-  const revocation = new Promise(resolve => { revoked = resolve; });
++  let cancelled;
++  const cancellation = new Promise(resolve => { cancelled = resolve; });
+   const webAuth = createWebAuth();
+-  webAuth.onRevoke(revoked);
+   const request = await withServer(t, {
+     webAuth,
++    cancelPendingAuth: () => { cancelled(); },
+     listSessions: async () => { enter(); await blocked; return []; },
+     logout: () => { signOuts++; return { signedOut: true }; },
+   });
+@@ -270,7 +271,7 @@ test('logout drains owner requests, revokes streams and serializes concurrent ca
+   const pending = request('/sessions', { headers });
+   await entered;
+   const first = request('/logout', { method: 'POST', headers });
+-  await revocation;
++  await cancellation;
+   const second = request('/logout', { method: 'POST', headers });
+   assert.equal((await request('/sessions', { headers })).status, 409);
+   assert.equal(signOuts, 0);
+@@ -427,7 +428,7 @@ test('browser pairing gates boot data, cookies and API access', async (t) => {
+   assert.equal((await request('/api/sessions/list', { method: 'POST', headers: { cookie, origin: 'https://evil.example' } })).status, 403);
+   assert.equal((await request('/sessions', { headers: { host: 'evil.example', authorization: `Bearer ${TOKEN}` } })).status, 403);
+   await request('/logout', { method: 'POST', headers: { authorization: `Bearer ${TOKEN}` } });
+-  assert.equal((await request('/api/sessions/list', { method: 'POST', headers: { cookie } })).status, 401);
++  assert.equal((await request('/api/sessions/list', { method: 'POST', headers: { cookie } })).status, 200);
+ });
+ 
+ test('expired pairing codes and browser sessions cannot authorize a client', () => {
+@@ -455,7 +456,7 @@ test('remote control changes require the local profile bearer and current instan
+   assert.equal(reply.status, 200); assert.equal(reply.body.action, 'enable'); assert.equal(called, 1);
+ });
+ 
+-test('expired-account boundary revokes browser access and drains admitted writes', async t => {
++test('expired-account boundary keeps pairing and drains admitted writes', async t => {
+   let release, entered;
+   const gate = new Promise(resolve => { release = resolve; });
+   const started = new Promise(resolve => { entered = resolve; });
+@@ -471,7 +472,7 @@ test('expired-account boundary revokes browser access and drains admitted writes
+   let drained = false;
+   const pause = server.pauseOwnerRequests().then(() => { drained = true; });
+   await Promise.resolve(); assert.equal(drained, false);
+-  assert.equal(webAuth.accepts(`cindy_host_web=${cookie}`), false);
++  assert.equal(webAuth.accepts(`cindy_host_web=${cookie}`), true);
+   assert.equal((await fetch(`${base}/sessions`, { headers: { authorization: `Bearer ${TOKEN}` } })).status, 409);
+   assert.equal((await fetch(`${base}/web/pair`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}` } })).status, 409);
+   release(); await first; await pause;
+@@ -505,3 +506,76 @@ for (const boundary of ['logout', 'expired-owner', 'stop']) {
+     assert.equal(bridge.status().waiting, 0);
+   });
+ }
++
++// #10600: a paired signed-out browser must receive auth changes, while replay
++// and live traffic must not disclose owner events before the runtime is ready.
++test('signed-out event subscriptions reset cursors without replaying hidden owner events', { timeout: 5000 }, async t => {
++  const events = createEventHub();
++  events.publish({ type: 'session_changed', secret: 'old-owner-replay' });
++  let ready = false;
++  let controllerAttachments = 0;
++  const webAuth = createWebAuth();
++  const cookie = `cindy_host_web=${webAuth.exchange(webAuth.pair())}`;
++  const server = createHostServer({ token: TOKEN, events, webAuth, isOwnerReady: () => ready,
++    connectController: () => { controllerAttachments++; return () => {}; },
++  });
++  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
++  const abort = new AbortController();
++  t.after(() => { abort.abort(); server.closeAllConnections(); server.close(); });
++  async function open() {
++    const response = await fetch(`http://127.0.0.1:${server.address().port}/events?protocol=2&confirmations=1&since=0&runtime=${events.replay({}).runtime}`, { headers: { cookie }, signal: abort.signal });
++    assert.equal(response.status, 200);
++    const reader = response.body.getReader();
++    let text = '';
++    const through = async marker => {
++      while (!text.includes(marker)) {
++        const { value, done } = await reader.read();
++        assert.equal(done, false); text += new TextDecoder().decode(value);
++      }
++      return text;
++    };
++    const initial = await through('"phase":"ready"');
++    return { reader, through, initial };
++  }
++  const signedOut = await open();
++  assert.equal(signedOut.initial.includes('old-owner-replay'), false);
++  assert.equal(controllerAttachments, 0);
++  events.publish({ type: 'session_changed', secret: 'unready-live' });
++  events.publish({ type: 'auth_changed', marker: 'live-auth' });
++  assert.equal((await signedOut.reader.read()).done, true);
++  const refreshed = await open();
++  assert.equal(refreshed.initial.includes('unready-live'), false);
++  ready = true;
++  events.clear();
++  events.publish({ type: 'auth_changed', marker: 'ready-auth' });
++  assert.equal((await refreshed.reader.read()).done, true);
++  const signedIn = await open();
++  assert.equal(controllerAttachments, 1);
++  events.publish({ type: 'session_changed', marker: 'ready-live' });
++  await signedIn.through('ready-live');
++  events.publish({ type: 'auth_changed', marker: 'refreshed-auth' });
++  await signedIn.through('refreshed-auth');
++  assert.equal(controllerAttachments, 1);
++  ready = false;
++  events.publish({ type: 'session_changed', secret: 'expired-live' });
++  assert.equal((await signedIn.reader.read()).done, true);
++});
++
++test('web login actions derive their controller from pairing and logout keeps that pairing', async t => {
++  const webAuth = createWebAuth();
++  const cookie = `cindy_host_web=${webAuth.exchange(webAuth.pair())}`;
++  const calls = [];
++  const request = await withServer(t, { webAuth, isOwnerReady: () => false,
++    getLoginState: () => ({ success: true, state: { step: 'identifier' } }),
++    dispatchLoginAction: (action, caller) => { calls.push({ action, caller }); return { success: true }; },
++  });
++  const init = { method: 'POST', headers: { cookie }, body: JSON.stringify({ action: { type: 'reset' }, caller: 'forged' }) };
++  assert.equal((await request('/api/auth/login-action', { ...init, headers: {} })).status, 401);
++  assert.equal((await request('/api/auth/login-state', init)).body.state.step, 'identifier');
++  assert.equal((await request('/api/auth/login-action', init)).status, 200);
++  assert.deepEqual(calls, [{ action: { type: 'reset' }, caller: webAuth.caller(cookie) }]);
++  const logout = await request('/api/auth/logout', { ...init, body: '{}' });
++  assert.equal(logout.status, 200);
++  assert.equal(logout.headers.get('set-cookie'), null);
++  assert.equal((await request('/api/auth/login-state', init)).status, 200);
++});
+diff --git a/apps/host/src/service.mjs b/apps/host/src/service.mjs
+index ff733fb0d0..c93267dc58 100644
+--- a/apps/host/src/service.mjs
++++ b/apps/host/src/service.mjs
+@@ -54,6 +54,13 @@ export function createHostService(deps) {
+     if (url.pathname === '/api/me') {
+         return { status: 200, body: await deps.me() };
+     }
++    if (url.pathname === '/api/auth/login-state') {
++        return { status: 200, body: await deps.getLoginState() };
++    }
++    if (url.pathname === '/api/auth/login-action') {
++        if (!context.caller) return { status: 403, body: { error: 'authenticated_controller_required' } };
++        return { status: 200, body: await deps.dispatchLoginAction(body?.action, context.caller) };
++    }
+     if (url.pathname === '/api/auth/state') {
+         return { status: 200, body: await (deps.getAuthState ? deps.getAuthState() : deps.me()) };
+     }
+diff --git a/apps/host/src/web-shim.test.mjs b/apps/host/src/web-shim.test.mjs
+index 15d1ed4114..fe8bc36ad4 100644
+--- a/apps/host/src/web-shim.test.mjs
++++ b/apps/host/src/web-shim.test.mjs
+@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
+ import { buildWebShim } from './web-client-build.mjs';
+ import { createHostServer } from './server.mjs';
+ import { createHostService } from './service.mjs';
++import { createEventHub } from './events.mjs';
++import { createWebAuth } from './web-auth.mjs';
++import { projectHostAuthState } from './auth-state.ts';
+ 
+ // Production entry: evaluate the browser shim and invoke its public preload API.
+ // Regression: auth aliases doubled /api, local entry spread a Promise and
+@@ -19,7 +22,7 @@ const cleanups = [];
+ afterEach(() => { for (const close of cleanups.splice(0)) close(); });
+ function browser(respond = () => ({}), script = source, openEvents = (_url, { signal }) => new Promise((_resolve, reject) => {
+   signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+-})) {
++}), schedule = setTimeout) {
+   const calls = [];
+   const listeners = new Map();
+   const redirects = [];
+@@ -28,7 +31,7 @@ function browser(respond = () => ({}), script = source, openEvents = (_url, { si
+   const context = vm.createContext({
+     window, navigator: { language: 'en', platform: 'test', clipboard: { writeText() {} } },
+     document: { createElement: () => ({ dataset: {} }), head: { appendChild() {} } },
+-    location: { href: 'http://127.0.0.1:1234/#/cc-agent/old', replace(url) { redirects.push(url); } }, console, TextDecoder, AbortController, URL, URLSearchParams, setTimeout, clearTimeout,
++    location: { href: 'http://127.0.0.1:1234/#/cc-agent/old', replace(url) { redirects.push(url); } }, console, TextDecoder, AbortController, URL, URLSearchParams, setTimeout: schedule, clearTimeout,
+     fetch: async (url, options) => {
+       // Keep the background event subscription pending, without timers/handles.
+       if (url.includes('/events?')) return openEvents(url, options);
+@@ -87,7 +90,7 @@ test('both auth API shapes use the same Host routes', async () => {
+ // Regression (#10614): behind a reverse proxy that serves the page below the
+ // site root, root-absolute Host paths left the prefix and reached the wrong
+ // server. Minimal input: one RPC, one chat turn, the event stream and logout.
+-test('a proxy path prefix reaches Host requests, chat, events and the logout redirect', async () => {
++test('a proxy path prefix reaches Host requests, chat, events and logout', async () => {
+   const streams = [];
+   const b = browser(() => ({}), `window.__CINDY_BASE__ = '/cindy/';${source}`, (url, { signal }) => {
+     streams.push(url);
+@@ -97,11 +100,11 @@ test('a proxy path prefix reaches Host requests, chat, events and the logout red
+   await b.api.maker.send('task', 'hi');
+   await b.api.authLogout();
+   assert.deepEqual(b.calls.map(c => c.url), ['/cindy/api/auth/state', '/cindy/chat', '/cindy/api/auth/logout']);
+-  assert.deepEqual(b.redirects, ['/cindy/connect']);
++  assert.deepEqual(b.redirects, []);
+   assert.ok(streams.length > 0 && streams.every(url => url.startsWith('/cindy/events?')), streams.join());
+ });
+ 
+-// The prefix also feeds the logout redirect, so only a same-origin path counts.
++// Only a same-origin path counts, including after account logout.
+ // A URL, `//host` or a backslash (browsers read it as `/`) keeps root paths.
+ test('a prefix that is not a same-origin path is ignored', async () => {
+   for (const value of ['https://evil.example', '//evil.example', '/\\evil.example', 42]) {
+@@ -109,7 +112,7 @@ test('a prefix that is not a same-origin path is ignored', async () => {
+     await b.api.auth.getState();
+     await b.api.authLogout();
+     assert.deepEqual(b.calls.map(c => c.url), ['/api/auth/state', '/api/auth/logout'], String(value));
+-    assert.deepEqual(b.redirects, ['/connect'], String(value));
++    assert.deepEqual(b.redirects, [], String(value));
+   }
+ });
+ 
+@@ -363,3 +366,215 @@ test('an expired browser pairing keeps the page and can reconnect after pairing
+   assert.ok(b.calls.every(c => !c.url.includes('/enqueue')));
+   assert.deepEqual(b.redirects, []);
+ });
++
++// #10600: the actual shim must forward login actions and keep paired browsers
++// on the account login page after logout. Existing alias tests only read auth.
++test('web login uses real Host state and logout does not navigate to pairing', async () => {
++  const b = browser((url, body) => url.endsWith('login-state')
++    ? { success: true, state: { step: 'identifier', providers: { social: ['google'] } } }
++    : { success: true, state: { step: 'identifier' } });
++  assert.equal((await b.api.authGetLoginState()).state.step, 'identifier');
++  b.window.open = () => ({ close() {} });
++  await b.api.authDispatchLoginAction({ type: 'discover-sso-org', org: 'example' });
++  await b.api.authLogout();
++  assert.deepEqual(b.calls.map(({ url, body }) => ({ url, body })), [
++    { url: '/api/auth/login-state', body: {} },
++    { url: '/api/auth/login-action', body: { action: { type: 'discover-sso-org', org: 'example' } } },
++    { url: '/api/auth/logout', body: {} },
++  ]);
++  assert.deepEqual(b.redirects, []);
++});
++
++test('browser authorization opens on the controller and waits for the Host outcome', async t => {
++  t.mock.timers.enable({ apis: ['setTimeout'] });
++  const popup = { location: 'about:blank', opener: {}, close() {} };
++  const b = browser(url => url.endsWith('login-action')
++    ? { success: true, state: { step: 'browser-redirect', label: 'Google' }, authorizeUrl: 'https://auth.example.invalid/authorize' }
++    : { success: true, state: { step: 'completed', membership: { id: 'owner' } } });
++  b.window.open = () => popup;
++  const pending = b.api.authDispatchLoginAction({ type: 'start-browser', kind: 'social', providerOrConnectionId: 'google', label: 'Google' });
++  await new Promise(resolve => setImmediate(resolve));
++  assert.equal(popup.location, 'https://auth.example.invalid/authorize');
++  assert.equal(popup.opener, null);
++  t.mock.timers.tick(1000);
++  assert.equal((await pending).state.step, 'completed');
++  assert.deepEqual(b.calls.map(call => call.url), ['/api/auth/login-action', '/api/auth/login-state']);
++});
++
++test('blocked browser authorization does not leave a Host login running', async () => {
++  const b = browser();
++  b.window.open = () => null;
++  const result = await b.api.authDispatchLoginAction({ type: 'start-browser', kind: 'social', providerOrConnectionId: 'google', label: 'Google' });
++  assert.equal(result.code, 'BROWSER_OPEN_FAILED');
++  assert.equal(b.calls.length, 0);
++});
++
++
++test('sole SSO auto-start reuses the tab reserved before asynchronous discovery', async () => {
++  const popup = { close() {} };
++  let opens = 0;
++  const b = browser((url, body) => body?.action?.type === 'discover-sso-org'
++    ? { success: true, state: { step: 'method-choice', methods: [{ type: 'sso', connectionId: 'idp' }] } }
++    : { success: true, state: { step: 'completed' }, authorizeUrl: 'https://auth.example.invalid/sso' });
++  b.window.open = () => { opens++; return popup; };
++  await b.api.authDispatchLoginAction({ type: 'discover-sso-org', org: 'example' });
++  await b.api.authDispatchLoginAction({ type: 'start-browser', kind: 'sso', providerOrConnectionId: 'idp', label: 'SSO' });
++  assert.equal(opens, 1);
++  assert.equal(popup.location, 'https://auth.example.invalid/sso');
++});
++
++// Account expiry changes the account projection on the existing paired page;
++// it must not start another pairing flow or navigate away from the login shell.
++test('account expiry returns the paired browser to the signed-out projection', async () => {
++  let stream;
++  const b = browser(url => url.endsWith('login-state')
++    ? { success: true, state: { step: 'identifier' } }
++    : { user: { id: 'owner' }, dataOwnerId: 'owner', canEnterApp: true, isAuthenticated: true }, source,
++    () => new Response(new ReadableStream({ start(controller) { stream = controller; } })));
++  const auth = [];
++  b.api.onAuthStateChange(state => auth.push(state));
++  for (let n = 0; n < 30; n++) await Promise.resolve();
++  stream.enqueue(new TextEncoder().encode('data: ' + JSON.stringify({ seq: 1, type: 'auth_changed', user: null,
++    dataOwnerId: null, mode: 'signed-out', canEnterApp: false, isAuthenticated: false }) + '\n\n'));
++  for (let n = 0; n < 30; n++) await Promise.resolve();
++  assert.equal(auth.at(-1).canEnterApp, false);
++  assert.equal(auth.at(-1).user, null);
++  assert.equal((await b.api.authGetLoginState()).state.step, 'identifier');
++  assert.equal(b.calls.some(call => call.url === '/web/session'), false);
++  assert.deepEqual(b.redirects, []);
++});
++
++
++// #10600: raw SSE assertions missed cursor gaps after filtering. Exercise the
++// actual server, protocol=2 decoder and shim; only the reconnect clock is sped up.
++test('signed-out protocol-2 streams stay idle through hidden events and reconcile at auth boundaries', { timeout: 5000 }, async t => {
++  const events = createEventHub();
++  events.publish({ type: 'text', data: { text: 'hidden-replay' } });
++  let ready = false;
++  let ownerGeneration = 0;
++  let opens = 0;
++  let closes = 0;
++  const webAuth = createWebAuth();
++  const cookie = `cindy_host_web=${webAuth.exchange(webAuth.pair())}`;
++  // main.ts uses this full projection for both HTTP snapshots and auth events.
++  const authState = () => projectHostAuthState({ account: { authenticated: ready, realm: 'global' },
++    accountUser: ready ? { id: 'owner' } : null, owner: ready ? 'owner' : null,
++    generation: ownerGeneration, deviceId: null });
++  const server = createHostServer({ token: 'unused-test-token', events, webAuth, isOwnerReady: () => ready,
++    getAuthState: authState,
++  });
++  server.on('request', (request, response) => {
++    if (request.url.startsWith('/events')) response.on('close', () => { closes++; });
++  });
++  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
++  const base = `http://127.0.0.1:${server.address().port}`;
++  const b = browser((url, body) => fetch(base + url, { method: 'POST', headers: { cookie }, body: JSON.stringify(body) }),
++    source, (url, { signal }) => { opens++; return fetch(base + url, { headers: { cookie }, signal }); },
++    (callback, ms) => setTimeout(callback, ms === 1000 ? 0 : ms));
++  t.after(() => { b.close(); server.closeAllConnections(); server.close(); });
++  const states = [];
++  const auth = [];
++  const waiters = [];
++  b.api.onAuthStateChange(state => auth.push(state));
++  b.api.hostConnection.onStateChanged(state => {
++    states.push(state);
++    for (const check of waiters) check();
++  });
++  const connected = n => new Promise(resolve => {
++    const check = () => { if (states.at(-1)?.status === 'connected' && states.at(-1).connection === n) resolve(); };
++    waiters.push(check); check();
++  });
++  const received = [];
++  b.api.maker.onEvent(event => received.push(event));
++  await connected(1);
++  assert.equal(auth.at(-1).canEnterApp, false);
++  assert.equal(b.api.maker.claimLegacyModelVisibilityOwner().ownerGeneration, 0);
++  for (let batch = 0; batch < 2; batch++) {
++    for (let i = 0; i < 100; i++) events.publish({ type: 'text', data: { text: 'hidden-live' } });
++    for (let i = 0; i < 3; i++) await new Promise(resolve => setImmediate(resolve));
++    assert.equal(opens, batch + 1);
++    assert.equal(closes, batch);
++    assert.equal(received.length, 0);
++    events.publish({ type: 'auth_changed', ...authState() });
++    await connected(batch + 2);
++    assert.equal(opens, batch + 2);
++    assert.equal(auth.at(-1).canEnterApp, false);
++  }
++  ready = true;
++  ownerGeneration = 3;
++  events.clear();
++  events.publish({ type: 'auth_changed', ...authState() });
++  await connected(4);
++  assert.equal(auth.at(-1).canEnterApp, true);
++  assert.deepEqual(auth.slice(-2).map(state => state.ownerGeneration), [3, 3]);
++  assert.ok(auth.slice(-2).every(state => state.dataOwnerId === 'owner'));
++  assert.equal(b.api.maker.claimLegacyModelVisibilityOwner().ownerGeneration, 3);
++  assert.equal(b.api.maker.claimLegacyModelVisibilityOwner().dataOwnerId, 'owner');
++  assert.equal(b.api.sidebarSettings.loadSnapshot().ownerGeneration, 3);
++  const delivered = new Promise(resolve => b.api.maker.onEvent(resolve));
++  events.publish({ type: 'text', sessionId: 'task', data: { text: 'ready-live' } });
++  assert.equal((await delivered).event.data.text, 'ready-live');
++  ready = false;
++  ownerGeneration = 4;
++  events.publish({ type: 'text', data: { text: 'expired-hidden' } });
++  await connected(5);
++  assert.equal(auth.at(-1).canEnterApp, false);
++  assert.equal(opens, 5);
++  assert.equal(b.api.maker.claimLegacyModelVisibilityOwner().ownerGeneration, 4);
++  assert.deepEqual(b.redirects, []);
++});
++
++// fnOS VM #10600: in-process login reached generation 3, but the cached claim
++// stayed at generation 1 and left modelVisibilityPrefs in owner-pending. The
++// public shim boundary is sufficient; no renderer/React harness is needed.
++test('account events refresh synchronous model and sidebar owner stamps', async () => {
++  let stream;
++  const signedOut = { user: null, dataOwnerId: null, ownerGeneration: 0 };
++  const b = browser(() => signedOut, source, () => new Response(new ReadableStream({ start(controller) {
++    stream = controller;
++    for (const phase of ['start', 'ready']) controller.enqueue(new TextEncoder().encode('data: ' + JSON.stringify({
++      type: 'host_stream', phase, runtime: 'owner-stamp-test', seq: 0, reason: 'initial',
++    }) + '\n\n'));
++  } }), { headers: { 'x-cindy-event-protocol': '2' } }));
++  const previousClaim = b.api.maker.claimLegacyModelVisibilityOwner();
++  const previousSidebar = b.api.sidebarSettings.loadSnapshot();
++  assert.equal(previousClaim.dataOwnerId, null);
++  assert.equal(previousClaim.ownerGeneration, 0);
++  assert.equal(previousClaim.canWriteOwnerScoped, false);
++  assert.equal(b.api.maker.claimLegacyModelVisibilityOwner(), previousClaim);
++  let seq = 0;
++  const publish = auth => new Promise(resolve => {
++    const unsubscribe = b.api.onAuthStateChange(value => {
++      if (value.ownerGeneration !== auth.ownerGeneration) return;
++      unsubscribe(); resolve(b.api.maker.claimLegacyModelVisibilityOwner());
++    });
++    stream.enqueue(new TextEncoder().encode('data: ' + JSON.stringify({ type: 'auth_changed', seq: ++seq, ...auth }) + '\n\n'));
++  });
++  const loggedIn = await publish({ user: { id: 'owner' }, dataOwnerId: 'owner', ownerGeneration: 3 });
++  assert.equal(loggedIn.dataOwnerId, 'owner');
++  assert.equal(loggedIn.ownerGeneration, 3);
++  assert.equal(loggedIn.canWriteOwnerScoped, true);
++  assert.notEqual(loggedIn, previousClaim);
++  assert.equal(b.api.maker.claimLegacyModelVisibilityOwner(), loggedIn);
++  const sidebar = b.api.sidebarSettings.loadSnapshot();
++  assert.notEqual(sidebar, previousSidebar);
++  assert.equal(sidebar.dataOwnerId, 'owner');
++  assert.equal(sidebar.ownerGeneration, 3);
++  const renewed = await publish({ user: { id: 'owner' }, dataOwnerId: 'owner', ownerGeneration: 4 });
++  assert.equal(renewed.ownerGeneration, 4);
++  assert.notEqual(renewed, loggedIn);
++  assert.equal(b.api.sidebarSettings.loadSnapshot().ownerGeneration, 4);
++  const loggedOut = await publish({ user: null, dataOwnerId: null, ownerGeneration: 5 });
++  assert.equal(loggedOut.ownerGeneration, 5);
++  assert.equal(loggedOut.dataOwnerId, null);
++  assert.equal(loggedOut.canWriteOwnerScoped, false);
++});
++
++test('boot owner generation is available synchronously before the event connection opens', () => {
++  const boot = { auth: { user: { id: 'boot-owner' }, ownerId: 'boot-owner', ownerGeneration: 7 } };
++  const b = browser(() => ({}), `window.__cindyBoot = ${JSON.stringify(boot)};\n${source}`);
++  const claim = b.api.maker.claimLegacyModelVisibilityOwner();
++  assert.equal(claim.dataOwnerId, 'boot-owner');
++  assert.equal(claim.ownerGeneration, 7);
++  assert.equal(b.api.sidebarSettings.loadSnapshot().ownerGeneration, 7);
++});
+diff --git a/apps/web/shim.js b/apps/web/shim.js
+index b344ebe96b..be940c3662 100644
+--- a/apps/web/shim.js
++++ b/apps/web/shim.js
+@@ -105,9 +105,18 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
+     voiceInput: boot.voiceInput ?? { settings: {}, history: [] },
+   };
+   const ownerStamp = () => ({
+-    dataOwnerId: boot.auth?.ownerId ?? null,
+-    ownerGeneration: 1,
++    dataOwnerId: window.__cindyBoot?.auth?.ownerId ?? null,
++    ownerGeneration: window.__cindyBoot?.auth?.ownerGeneration ?? 0,
+   });
++  function updateAuthState(auth) {
++    const previous = ownerStamp();
++    (window.__cindyBoot ??= {}).auth = { user: auth.user, ownerId: auth.dataOwnerId, ownerGeneration: auth.ownerGeneration ?? 0 };
++    const current = ownerStamp();
++    if (previous.dataOwnerId !== current.dataOwnerId || previous.ownerGeneration !== current.ownerGeneration) {
++      syncSnapshots.delete('maker.claimLegacyModelVisibilityOwner\u0000[]');
++      syncSnapshots.delete('sidebarSettings.loadSnapshot\u0000[]');
++    }
++  }
+   const pinnedOrder = () => Array.from(settingsMirror.sidebar.pinnedOrder ?? []);
+   function saveSidebar(next) {
+     settingsMirror.sidebar = { ...settingsMirror.sidebar, ...next };
+@@ -140,6 +149,36 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
+ 
+   const rpc = (path, args) => requestHost(`/api${path}`, args);
+   const hostChannels = createHostChannelHandlers(requestHost);
++  let loginOperation = 0;
++  let reservedLoginPopup = null;
++  let loginPageClosed = false;
++  async function dispatchWebLoginAction([action]) {
++    const operation = ++loginOperation;
++    // Reserve a tab during the click, before asynchronous discovery loses user activation.
++    const needsBrowser = action?.type === 'start-browser' || action?.type === 'discover-sso-org';
++    const popup = needsBrowser ? reservedLoginPopup ?? window.open('about:blank', '_blank') : null;
++    if (!needsBrowser) reservedLoginPopup?.close();
++    reservedLoginPopup = null;
++    if (needsBrowser && !popup) {
++      return { success: false, code: 'BROWSER_OPEN_FAILED', state: { step: 'error', code: 'BROWSER_OPEN_FAILED', recoverTo: 'identifier' } };
++    }
++    if (popup) popup.opener = null;
++    try {
++      let result = await hostChannels['auth.dispatchLoginAction']([action]);
++      if (result.authorizeUrl && popup) popup.location = result.authorizeUrl;
++      else if (action?.type === 'discover-sso-org' && result.success && result.state?.step === 'method-choice'
++        && result.state.methods.length === 1 && result.state.methods[0].type === 'sso') {
++        // AuthContext immediately starts a sole SSO method after discovery, outside user activation.
++        reservedLoginPopup = popup;
++      } else popup?.close();
++      while (result.state?.step === 'browser-redirect' && operation === loginOperation && !loginPageClosed) {
++        await new Promise(resolve => setTimeout(resolve, 1000));
++        if (operation !== loginOperation || loginPageClosed) break;
++        result = await hostChannels['auth.getLoginState']();
++      }
++      return result;
++    } catch (error) { popup?.close(); throw error; }
++  }
+ 
+   /**
+    * Frozen singletons for the channels the host answers with a constant.
+@@ -442,8 +481,7 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
+     'maker.setThinkingEnabled': () => unsupported('maker.setThinkingEnabled'),
+     'maker.listDesktopCommands': () => ({ success: true, commands: STATIC.emptyList }),
+     'maker.claimLegacyModelVisibilityOwner': () => ({
+-      dataOwnerId: window.__cindyBoot?.auth?.ownerId ?? null,
+-      ownerGeneration: 1,
++      ...ownerStamp(),
+       canWriteOwnerScoped: Boolean(window.__cindyBoot?.auth?.ownerId),
+       claimed: false,
+       claimedByOtherOwner: false,
+@@ -517,9 +555,8 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
+     // verdict, including canEnterApp=false when its account is signed out.
+     'authEnterLocal': () => routes['authInitialize'](),
+     'authExitLocal': () => routes['authInitialize'](),
+-    // The host exposes no cloud login surface; the entry step still offers the
+-    // local profile, which is what the desktop client shows when signed out.
+-    'authGetLoginState': () => ({ success: true, state: { step: 'entry' } }),
++    'authGetLoginState': () => hostChannels['auth.getLoginState'](),
++    'authDispatchLoginAction': dispatchWebLoginAction,
+     'authInitialize': () => hostChannels['auth.getState'](),
+     'authRefresh': () => hostChannels['auth.refresh'](),
+     'checkEnvironment': () => {
+@@ -748,7 +785,7 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
+     'authSwitchAccount': () => unsupported('authSwitchAccount'),
+     'authBeginAddAccount': () => ({ success: false, code: 'NOT_SUPPORTED', state: null }),
+     'authCancelAddAccount': () => undefined,
+-    'authLogout': async () => { const result = await hostChannels['auth.logout'](); location.replace(`${base}/connect`); return result; },
++    'authLogout': () => hostChannels['auth.logout'](),
+     'authGetAccountDeletionAvailability': () => ({ success: true, value: { available: false, reason: 'not_supported' } }),
+     'authRequestAccountDeletionChallenge': () => ({ success: false, code: 'NOT_SUPPORTED' }),
+     'authConfirmAccountDeletion': () => ({ success: false, code: 'NOT_SUPPORTED' }),
+@@ -1031,7 +1068,7 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
+       beforeEvents: async (signal) => {
+         const auth = await requestHost('/api/auth/state', null, 'POST', signal);
+         if (signal.aborted) return;
+-        (window.__cindyBoot ??= {}).auth = { user: auth.user, ownerId: auth.dataOwnerId };
++        updateAuthState(auth);
+         emit('onAuthStateChange', auth);
+       },
+       onState: (state) => {
+@@ -1044,7 +1081,7 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
+         // Interaction traffic has its own preload channels; everything
+         // else stays on the shared event stream.
+         if (parsed.type === 'auth_changed') {
+-          (window.__cindyBoot ??= {}).auth = { user: parsed.user, ownerId: parsed.dataOwnerId };
++          updateAuthState(parsed);
+           emit('onAuthStateChange', parsed);
+         } else if (parsed.type === 'interaction_request') {
+           emit('maker.onInteractionRequest', { sessionId: parsed.sessionId, request: parsed.request });
+@@ -1292,7 +1329,7 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
+     };
+     window.addEventListener('pagehide', event => { if (!event.persisted) pairing.close(); });
+   }
+-  window.addEventListener('pagehide', event => { if (!event.persisted) eventConnection?.stop(); });
++  window.addEventListener('pagehide', event => { if (!event.persisted) { loginPageClosed = true; ++loginOperation; reservedLoginPopup?.close(); eventConnection?.stop(); } });
+   window.addEventListener('pageshow', event => { if (event.persisted) eventConnection?.reconnect(); });
+   // Start event stream immediately on boot
+   ensureEventStream();
+diff --git a/docs/dev-rules/protocol-compatibility/host-web-adapter-experimental.md b/docs/dev-rules/protocol-compatibility/host-web-adapter-experimental.md
+index e358464f61..99ae2795bc 100644
+--- a/docs/dev-rules/protocol-compatibility/host-web-adapter-experimental.md
++++ b/docs/dev-rules/protocol-compatibility/host-web-adapter-experimental.md
+@@ -84,3 +84,28 @@ profile 所有权迁移或开启日常桌面迁移。实现与验证边界见
+   `CONNECTION_TIMEOUT`。`maker:session-background-tasks:list` 内嵌时不校验发送方，客户端模式按
+   已登记应用窗口校验（主窗口、副窗口、右侧栏窗口都已登记），子 frame 与外部页面被拒。
+ - 不改变 Device Link 帧、relay、官方或自建中转 API，没有新增需要中转识别的字段。
++
++## 独立 Host 网页账号登录（#10600，未发布）
++
++共享合同新增 `auth:get-login-state` / `auth.getLoginState` → `POST /api/auth/login-state`，
++以及 `auth:dispatch-login-action` / `auth.dispatchLoginAction` → `POST /api/auth/login-action`。
++后者请求体为 `{ action }`，只接受传输认证得到的 controller；body 中的 caller 没有权限。
++结果沿用 `DesktopLoginActionResult`，启动浏览器授权时额外返回 `authorizeUrl`；仅网页 shim
++负责在当前浏览器打开它，并在等待期间每秒串行读取登录状态，直到完成、取消、失败或离页。
++Host 复用托管回调的 1 秒／2 秒退避、5 分钟期限，PKCE、pollSecret 与各类 ticket 只留在 Host。
++
++`/api/auth/logout` 和账号过期不再撤销 `cindy_host_web` 配对，也不要求回 `/connect`。
++`/events` 允许已配对但尚无 owner 的连接；未就绪、暂停或登出期间，只放行 `auth_changed`，
++历史重放、实时 owner 事件和定向确认均仍受就绪门约束。登录成功清空旧事件历史后推送
++`auth_changed`；本进程不允许切换另一 owner。Host 重启与配对到期语义不变。
++
++不新增游标帧：未就绪的 protocol=2 连接使用既有 `initial` 快照握手，不重放 owner 历史；
++旧版 `getEventsSince` 路径也不重放。可见性改变，或隐藏事件后出现可见账号事件时，Host
++结束 SSE，客户端按现有重连流程先重读账号状态，再用快照握手恢复游标，避免过滤造成
++序号缺口。仅隐藏事件不结束连接，未登录空闲不轮询 `/events`。旧客户端只收到已有帧和
++正常 EOF，无需理解新协议；共享解码器、Mobile 和 Device Link 协议均未改动。
++
++
++该增量面向随 Host 配套提供的网页 shim；旧 Host 不支持新增路径，旧 shim 仍无法网页登录。
++现有 Desktop 普通启动不受影响，不声明已支持 Host 桌面客户端的浏览器授权交接。
++回归入口：`apps/host/src/auth/login.test.mjs`、`server.test.mjs`、`web-shim.test.mjs`。
+diff --git a/docs/host/basic-web.md b/docs/host/basic-web.md
+index 1a6173949a..510959781e 100644
+--- a/docs/host/basic-web.md
++++ b/docs/host/basic-web.md
+@@ -164,3 +164,17 @@ pnpm preview:host
+ 也不会自动续跑被进程退出中断的执行。本次结果只覆盖上述基础流程，不代表全功能可发布。
+ 
+ 回归覆盖、UI 检查和未验收范围见 [维护计划](maintenance-plan.md#第二批实现与验证记录2026-11-10)。
++
++### 网页账号登录（#10600，第一阶段）
++
++独立 Host 无账号启动后，已配对浏览器可以直接使用原登录页进行社交登录或当前 Host
++区域内的企业 SSO；授权通过托管回调轮询取回，完成后在进程内装配账号运行时，无需重启。
++多账号选择和 SSO 追加验证由 Host 持有 ticket，网页只收到展示状态。手机／邮箱验证码、
++绑定、跨区域 SSO、本地模式及运行中切换另一 owner 不在本阶段范围内。
++
++退出 Cindy 账号或账号过期后保留浏览器配对；页面通过 `auth_changed` 返回登录页。
++配对仍只在当前 Host 进程内有效，重启 Host 后需重新配对。未就绪期间 SSE 只发送账号
++状态变化，不发送或重放 owner 事件；跨就绪边界时使用既有 SSE 重连及快照握手，恢复正常事件与确认通道。隐藏事件本身不触发重连。
++
++实现及回归：`apps/host/src/auth/web-login.ts`、`auth/login.test.mjs`、`server.test.mjs`、
++`web-shim.test.mjs`。这段描述能力范围，真实账号与跨平台验收结果仍须单独记录。
+diff --git a/packages/maker-shared/src/hostChannelContract.ts b/packages/maker-shared/src/hostChannelContract.ts
+index 595ae00500..3ca113b219 100644
+--- a/packages/maker-shared/src/hostChannelContract.ts
++++ b/packages/maker-shared/src/hostChannelContract.ts
+@@ -405,6 +405,18 @@ export const HOST_CONTRACT_CHANNELS: readonly HostChannelDef[] = [
+   },
+ 
+   // --- Auth (Single Writer) ---
++  {
++    desktopChannel: 'auth:get-login-state',
++    webPath: 'auth.getLoginState',
++    hostPath: '/api/auth/login-state',
++    body: () => ({}),
++  },
++  {
++    desktopChannel: 'auth:dispatch-login-action',
++    webPath: 'auth.dispatchLoginAction',
++    hostPath: '/api/auth/login-action',
++    body: ([action]) => ({ action }),
++  },
+   {
+     desktopChannel: 'auth:logout',
+     webPath: 'auth.logout',

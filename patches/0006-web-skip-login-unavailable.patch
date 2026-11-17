@@ -1,0 +1,242 @@
+Subject: web: hide the skip-login entry the standalone Host cannot honour
+
+Why: the Host has no local mode, so 'skip login' silently did nothing. The web
+client now rejects authEnterLocal and the login page hides both skip entries.
+Same code as the upstream PR branch fix/web-skip-login-unavailable, merged after 0005.
+Upstream: issue https://github.com/makecindy/cindy/issues/10601, PR https://github.com/makecindy/cindy/pull/11049
+Remove when: the PR is merged and upstream.lock moves past it.
+
+diff --git a/apps/desktop/src/renderer/__tests__/authContextSessionBoundary.test.tsx b/apps/desktop/src/renderer/__tests__/authContextSessionBoundary.test.tsx
+index 34656617ea..24919638c9 100644
+--- a/apps/desktop/src/renderer/__tests__/authContextSessionBoundary.test.tsx
++++ b/apps/desktop/src/renderer/__tests__/authContextSessionBoundary.test.tsx
+@@ -374,7 +374,7 @@ describe('AuthContext session cache boundaries', () => {
+       const recoveryEpochBeforeFailure = view.result.current.dataOwnerRecoveryEpoch;
+ 
+       await act(async () => {
+-        await expect(view.result.current[action]()).rejects.toThrow(`${action} failed`);
++        await expect(view.result.current[action]!()).rejects.toThrow(`${action} failed`);
+       });
+ 
+       expect(view.result.current.dataOwnerId).toBe(expectedOwner);
+@@ -681,7 +681,7 @@ describe('AuthContext session cache boundaries', () => {
+     await waitFor(() => expect(view.result.current.dataOwnerId).toBeNull());
+ 
+     await act(async () => {
+-      await view.result.current.enterLocalMode();
++      await view.result.current.enterLocalMode!();
+     });
+     expect(view.result.current.dataOwnerId).toBe('local-v1');
+ 
+@@ -882,7 +882,7 @@ describe('AuthContext session cache boundaries', () => {
+     expect(cloudUid).not.toBe('');
+ 
+     await act(async () => {
+-      await view.result.current.enterLocalMode();
++      await view.result.current.enterLocalMode!();
+     });
+     // 本地模式是另一个分区:云端身份存的东西一条都不该露出来。
+     expect(listModelFavorites()).toHaveLength(0);
+diff --git a/apps/desktop/src/renderer/components/login/LoginPage.tsx b/apps/desktop/src/renderer/components/login/LoginPage.tsx
+index dc2a315b99..7f9769f86b 100644
+--- a/apps/desktop/src/renderer/components/login/LoginPage.tsx
++++ b/apps/desktop/src/renderer/components/login/LoginPage.tsx
+@@ -372,7 +372,7 @@ export function LoginPage({
+   // 「跳过登录」常驻入口在面板内(identifier 视图 SKIP_ENTRY 文字链);footer 仅保留
+   // 准备态、离线入口和 error 步的逃生入口，不依赖登录服务恢复。
+   const showLocalModeFooter =
+-    !isAddAccount && canLeaveProviderLoad && !credentialStoreFailed;
++    !isAddAccount && !!enterLocalMode && canLeaveProviderLoad && !credentialStoreFailed;
+   // 面板底部预留恒取全流程最大值(footer 124;协议行 48 被其覆盖):step 切换时
+   // 面板/品牌层零跳位(规则 7,codex 审查 P1)。browser-redirect/completed 维持 0,
+   // 与迁移前 main 口径一致(该两步由品牌 overlay/跳转态接管)。
+@@ -794,7 +794,7 @@ export function LoginPage({
+               圆钮;LoginSkipEntry ≠ LoginTextLink,见该组件注释):接既有 local mode
+               链路,过协议门(2026-07-29 拍板)。槽位在 error_text(380..430)之下、
+               与其首尾相接,两者同时可见互不重叠;error 出现不推移本入口(均 absolute)。 */}
+-          {!isAddAccount ? (
++          {!isAddAccount && enterLocalMode ? (
+             <LoginSkipEntry
+               testId="login-skip-entry"
+               disabled={isLoading || localModePending}
+diff --git a/apps/desktop/src/renderer/components/login/__tests__/LoginPage.consent.test.tsx b/apps/desktop/src/renderer/components/login/__tests__/LoginPage.consent.test.tsx
+index 35b22aaac8..40f252159c 100644
+--- a/apps/desktop/src/renderer/components/login/__tests__/LoginPage.consent.test.tsx
++++ b/apps/desktop/src/renderer/components/login/__tests__/LoginPage.consent.test.tsx
+@@ -22,7 +22,7 @@ const loginHook = vi.hoisted(() => ({
+     dispatch: vi.fn(async () => true),
+     dispatchWithResult: vi.fn(async () => ({ success: true, code: null })),
+     clearError: vi.fn(),
+-    enterLocalMode: vi.fn(async (): Promise<void> => undefined),
++    enterLocalMode: vi.fn(async (): Promise<void> => undefined) as (() => Promise<void>) | undefined,
+   },
+ }));
+ 
+@@ -243,6 +243,24 @@ describe('consent guard(未勾选拦截个人登录链路)', () => {
+     });
+   });
+ 
++  // #10601, unit: real LoginPage; existing consent cases only cover available
++  // local mode. An unavailable action must hide both panel and escape entries.
++  it('hides local entry across login states when local mode is unavailable', async () => {
++    for (const state of [
++      null,
++      { step: 'entry' },
++      await identifierState('providers:cn-social'),
++      { step: 'error', code: 'AUTH_REQUEST_FAILED', recoverTo: 'identifier' },
++    ] as const) {
++      const view = mount(state as AuthFlowState | null, { enterLocalMode: undefined });
++      expect(screen.queryByTestId('login-skip-entry')).toBeNull();
++      expect(screen.queryByTestId('login-local-mode')).toBeNull();
++      expect(screen.queryByTestId('login-consent-dialog')).toBeNull();
++      view.unmount();
++    }
++    expect(enterLocalMode).not.toHaveBeenCalled();
++  });
++
+   // 2026-07-29 拍板(推翻同年 07-27「跳过登录免协议门」):不登录账号也是在用 Cindy
+   // 客户端,跳过登录与个人账号登录同口径先过协议门。旧游客圆钮入口已删除。
+   it('「跳过登录」未勾选 → 弹窗且不进本地模式;同意 → 续接 enterLocalMode', async () => {
+diff --git a/apps/desktop/src/renderer/contexts/AuthContext.tsx b/apps/desktop/src/renderer/contexts/AuthContext.tsx
+index 08f1cfe4ae..d2e31ec8fd 100644
+--- a/apps/desktop/src/renderer/contexts/AuthContext.tsx
++++ b/apps/desktop/src/renderer/contexts/AuthContext.tsx
+@@ -115,7 +115,7 @@ export interface AuthContextValue {
+   switchAccount: (accountKey: string) => Promise<void>;
+   beginAddAccount: () => Promise<DesktopLoginActionResult>;
+   cancelAddAccount: () => Promise<void>;
+-  enterLocalMode: () => Promise<void>;
++  enterLocalMode: (() => Promise<void>) | undefined;
+   exitLocalMode: () => Promise<void>;
+   hasAccountDeletionReceipt: boolean;
+   accountDeletionRestored: boolean;
+@@ -709,7 +709,8 @@ export function AuthProvider({
+       switchAccount,
+       beginAddAccount,
+       cancelAddAccount,
+-      enterLocalMode,
++      // The web shim synthesizes methods, so method presence is not a capability.
++      enterLocalMode: window.electronAPI?.hostConnection?.client === 'browser' ? undefined : enterLocalMode,
+       exitLocalMode,
+       hasAccountDeletionReceipt,
+       accountDeletionRestored,
+diff --git a/apps/desktop/src/renderer/contexts/__tests__/AuthContextInitializeCatch.test.tsx b/apps/desktop/src/renderer/contexts/__tests__/AuthContextInitializeCatch.test.tsx
+index 148c8b8b8b..13862ff795 100644
+--- a/apps/desktop/src/renderer/contexts/__tests__/AuthContextInitializeCatch.test.tsx
++++ b/apps/desktop/src/renderer/contexts/__tests__/AuthContextInitializeCatch.test.tsx
+@@ -92,6 +92,24 @@ afterEach(() => {
+ });
+ 
+ describe('initial auth decision', () => {
++  // #10601, unit: real Provider + useLogin. Existing failures only exercise
++  // desktop; browser identity must remove the action through both public hooks.
++  it.each([undefined, 'desktop', 'browser'] as const)('projects local entry for client %s', async (client) => {
++    Object.assign(window.electronAPI, { hostConnection: client ? { client } : undefined });
++    mocks.service.initialize.mockResolvedValue({ isAuthenticated: false, isCanary: false });
++    const hook = renderHook(() => ({ auth: useAuth(), login: useLogin({ autoLoad: false }) }), {
++      wrapper: AuthProvider,
++    });
++    await waitFor(() => expect(hook.result.current.auth.isInitializing).toBe(false));
++    if (client === 'browser') {
++      expect(hook.result.current.auth.enterLocalMode).toBeUndefined();
++      expect(hook.result.current.login.enterLocalMode).toBeUndefined();
++    } else {
++      expect(hook.result.current.auth.enterLocalMode).toBeTypeOf('function');
++      expect(hook.result.current.login.enterLocalMode).toBeTypeOf('function');
++    }
++  });
++
+   const signedOut: AuthState = {
+     user: null, mode: 'signed-out', dataOwnerId: null, ownerGeneration: 1,
+     ownerBoundaryPending: false, canEnterApp: false, isAuthenticated: false,
+@@ -202,7 +220,7 @@ describe('login recovery ignores abandoned IPC results', () => {
+       expect(hook.result.current.login.isLoading).toBe(true);
+       mocks.service.enterLocalMode.mockRejectedValueOnce(new Error('IPC unavailable'));
+       await act(async () => {
+-        await expect(hook.result.current.login.enterLocalMode()).rejects.toThrow('IPC unavailable');
++        await expect(hook.result.current.login.enterLocalMode!()).rejects.toThrow('IPC unavailable');
+       });
+       expect(hook.result.current.auth.loginState).toEqual({
+         step: 'error', code: 'AUTH_REQUEST_FAILED', recoverTo: 'identifier',
+@@ -335,14 +353,14 @@ describe('login recovery ignores abandoned IPC results', () => {
+     await act(async () => { await hook.result.current.dispatchLoginAction({ type: 'reset' }); });
+     mocks.service.enterLocalMode.mockRejectedValueOnce(new Error('skip failed'));
+     await act(async () => {
+-      await expect(hook.result.current.enterLocalMode()).rejects.toThrow('skip failed');
++      await expect(hook.result.current.enterLocalMode!()).rejects.toThrow('skip failed');
+     });
+     expect(hook.result.current.loginState).toEqual(form);
+ 
+     let failSkip!: (error: Error) => void;
+     mocks.service.enterLocalMode.mockReturnValueOnce(new Promise((_, reject) => { failSkip = reject; }));
+     let skip!: Promise<void>;
+-    act(() => { skip = hook.result.current.enterLocalMode(); });
++    act(() => { skip = hook.result.current.enterLocalMode!(); });
+     await act(async () => { await hook.result.current.cancelAddAccount(); });
+     await act(async () => {
+       failSkip(new Error('old skip failed'));
+diff --git a/apps/desktop/src/renderer/hooks/useLogin.ts b/apps/desktop/src/renderer/hooks/useLogin.ts
+index 5013e431d4..b52429773a 100644
+--- a/apps/desktop/src/renderer/hooks/useLogin.ts
++++ b/apps/desktop/src/renderer/hooks/useLogin.ts
+@@ -110,6 +110,7 @@ export function useLogin({ autoLoad = true }: { autoLoad?: boolean } = {}): UseL
+   );
+ 
+   const enterLocalMode = useCallback(async () => {
++    if (!enterLocalModeFromAuth) return;
+     const operation = ++operationRef.current;
+     loadingRef.current = true;
+     setIsLoading(true);
+@@ -142,6 +143,6 @@ export function useLogin({ autoLoad = true }: { autoLoad?: boolean } = {}): UseL
+     clearError: () => {
+       setErrorCode(null);
+     },
+-    enterLocalMode,
++    enterLocalMode: enterLocalModeFromAuth ? enterLocalMode : undefined,
+   };
+ }
+diff --git a/apps/host/src/web-shim.test.mjs b/apps/host/src/web-shim.test.mjs
+index fe8bc36ad4..e414047ed4 100644
+--- a/apps/host/src/web-shim.test.mjs
++++ b/apps/host/src/web-shim.test.mjs
+@@ -126,13 +126,22 @@ test('installation and business confirmations use the authenticated Host routes'
+   ]);
+ });
+ 
+-test('entering the app preserves the actual Host auth verdict', async () => {
++// #10601: a state query silently accepted local entry. Unit: public shim API;
++// no Host identity exists, so entry must reject without querying signed-out auth.
++test('browser local entry is unavailable without querying Host auth', async () => {
++  const b = browser();
++  assert.equal(b.api.hostConnection.client, 'browser');
++  await assert.rejects(b.api.authEnterLocal(), /HOST_CHANNEL_UNSUPPORTED/);
++  assert.equal(b.calls.length, 0);
++});
++
++test('initializing auth preserves the actual Host auth verdict', async () => {
+   for (const state of [
+     { user: { id: 'test-user' }, mode: 'cloud', canEnterApp: true },
+     { user: null, mode: 'signed-out', canEnterApp: false },
+   ]) {
+     const b = browser(() => state);
+-    assert.deepEqual(JSON.parse(JSON.stringify(await b.api.authEnterLocal())), state);
++    assert.deepEqual(JSON.parse(JSON.stringify(await b.api.authInitialize())), state);
+   }
+ });
+ 
+diff --git a/apps/web/shim.js b/apps/web/shim.js
+index be940c3662..cff20a8c7b 100644
+--- a/apps/web/shim.js
++++ b/apps/web/shim.js
+@@ -551,9 +551,8 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
+     'maker.gitSafetySet': () => unsupported('maker.gitSafetySet'),
+     // The host already opened and migrated the owner database before serving.
+     'localDb.ensureReady': () => ({ ready: true }),
+-    // The browser cannot create a local identity. Preserve the Host's actual
+-    // verdict, including canEnterApp=false when its account is signed out.
+-    'authEnterLocal': () => routes['authInitialize'](),
++    // The browser cannot create a local identity; querying auth is not entry.
++    'authEnterLocal': () => unsupported('authEnterLocal'),
+     'authExitLocal': () => routes['authInitialize'](),
+     'authGetLoginState': () => hostChannels['auth.getLoginState'](),
+     'authDispatchLoginAction': dispatchWebLoginAction,

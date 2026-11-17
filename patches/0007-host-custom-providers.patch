@@ -1,0 +1,951 @@
+Subject: host: create custom providers and fetch their models from the web client
+
+Why: the web wizard could not save a bring-your-own-key provider such as
+DeepSeek. Adds the create and models-fetch channels, reusing the Desktop provider
+handlers (platform bindings split into providerHandlers.desktop.ts). Same code as
+the upstream PR branch feat/host-custom-providers, merged after 0006.
+Upstream: issue https://github.com/makecindy/cindy/issues/10644, PR https://github.com/makecindy/cindy/pull/11050
+Remove when: the PR is merged and upstream.lock moves past it.
+
+diff --git a/apps/desktop/src/main/maker-host/__tests__/genericOAuth.test.ts b/apps/desktop/src/main/maker-host/__tests__/genericOAuth.test.ts
+index 97151b9d58..db17881166 100644
+--- a/apps/desktop/src/main/maker-host/__tests__/genericOAuth.test.ts
++++ b/apps/desktop/src/main/maker-host/__tests__/genericOAuth.test.ts
+@@ -16,7 +16,7 @@ import { providerPresetOAuth } from '@cindy/model-providers';
+ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+ 
+ import type { OAuthProviderDescriptor, ProviderView } from '@cindy/model-providers';
+-import { fetchSavedOAuthProviderModels } from '../provider-model-fetch.js';
++import { fetchSavedOAuthProviderModels } from '../provider-model-fetch.desktop.js';
+ 
+ import {
+   parseModelsListResponse,
+diff --git a/apps/desktop/src/main/maker-host/__tests__/providerModelFetch.test.ts b/apps/desktop/src/main/maker-host/__tests__/providerModelFetch.test.ts
+index b1703593e9..1bcdc056f7 100644
+--- a/apps/desktop/src/main/maker-host/__tests__/providerModelFetch.test.ts
++++ b/apps/desktop/src/main/maker-host/__tests__/providerModelFetch.test.ts
+@@ -11,7 +11,7 @@ import {
+   buildModelsFetchRequest,
+   fetchProviderModels,
+   type ProviderModelsFetchSpec,
+-} from '../provider-model-fetch.js';
++} from '../provider-model-fetch.desktop.js';
+ 
+ function spec(over: Partial<ProviderModelsFetchSpec> = {}): ProviderModelsFetchSpec {
+   return {
+diff --git a/apps/desktop/src/main/maker-host/customProviderHeaderService.ts b/apps/desktop/src/main/maker-host/customProviderHeaderService.ts
+index 4f835c8ecd..fee0724541 100644
+--- a/apps/desktop/src/main/maker-host/customProviderHeaderService.ts
++++ b/apps/desktop/src/main/maker-host/customProviderHeaderService.ts
+@@ -1,34 +1,14 @@
+ import type { AgentKind, CustomProviderConfig } from '@cindy/model-providers';
+ import { UNRECOVERABLE_PROVIDER_CREDENTIAL } from '../secrets/providerCredentialState.js';
+ 
+-/** Preserve Desktop's encrypted migration and rollback on every launcher. */
+-export function createCustomProviderHeaderService(ports: {
+-  readCustomProviderHeadersForMutation: typeof import('../secrets/providerSecretStore.js').readCustomProviderHeadersForMutation;
+-  removeCustomProviderHeaders: typeof import('../secrets/providerSecretStore.js').removeCustomProviderHeaders;
+-  storeCustomProviderHeaders: typeof import('../secrets/providerSecretStore.js').storeCustomProviderHeaders;
+-  listCustomProviders: typeof import('./custom-provider-store.js').listCustomProviders;
+-  updateCustomProvider: typeof import('./custom-provider-store.js').updateCustomProvider;
+-  getCurrentDbClientUserId: typeof import('../localDb/client/current.js').getCurrentDbClientUserId;
+-}) {
+-const { readCustomProviderHeadersForMutation, removeCustomProviderHeaders, storeCustomProviderHeaders, listCustomProviders, updateCustomProvider, getCurrentDbClientUserId } = ports;
+-
+-
+-
+-
+-
+-
+-const CUSTOM_PROVIDER_RUNTIME_AGENTS: readonly AgentKind[] = [
++export const CUSTOM_PROVIDER_RUNTIME_AGENTS: readonly AgentKind[] = [
+   'claude-code',
+   'codex',
+   'pi',
+ ];
+ 
+-type CustomProviderHeaderSecrets = Partial<
+-  Record<AgentKind, Record<string, string>>
+->;
+-
+ /** Return a clone safe to persist plus the header values that must be encrypted. */
+-function splitCustomProviderHeaders(config: CustomProviderConfig): {
++export function splitCustomProviderHeaders(config: CustomProviderConfig): {
+   config: CustomProviderConfig;
+   headers: CustomProviderHeaderSecrets;
+ } {
+@@ -47,6 +27,22 @@ function splitCustomProviderHeaders(config: CustomProviderConfig): {
+   return { config: { ...config, runtimes }, headers };
+ }
+ 
++/** Preserve Desktop's encrypted migration and rollback on every launcher. */
++export function createCustomProviderHeaderService(ports: {
++  readCustomProviderHeadersForMutation: typeof import('../secrets/providerSecretStore.js').readCustomProviderHeadersForMutation;
++  removeCustomProviderHeaders: typeof import('../secrets/providerSecretStore.js').removeCustomProviderHeaders;
++  storeCustomProviderHeaders: typeof import('../secrets/providerSecretStore.js').storeCustomProviderHeaders;
++  listCustomProviders: typeof import('./custom-provider-store.js').listCustomProviders;
++  updateCustomProvider: typeof import('./custom-provider-store.js').updateCustomProvider;
++  getCurrentDbClientUserId: typeof import('../localDb/client/current.js').getCurrentDbClientUserId;
++}) {
++const { readCustomProviderHeadersForMutation, removeCustomProviderHeaders, storeCustomProviderHeaders, listCustomProviders, updateCustomProvider, getCurrentDbClientUserId } = ports;
++
++
++
++
++
++
+ /** Hydrate safeStorage-only runtime headers into a config used by routing/UI/Pi. */
+ function hydrateCustomProviderHeaders(
+   config: CustomProviderConfig,
+diff --git a/apps/desktop/src/main/maker-host/generic-oauth.ts b/apps/desktop/src/main/maker-host/generic-oauth.ts
+index 8f87ac4dc7..bec9c2a799 100644
+--- a/apps/desktop/src/main/maker-host/generic-oauth.ts
++++ b/apps/desktop/src/main/maker-host/generic-oauth.ts
+@@ -102,6 +102,23 @@ export interface GenericOAuthLoginOptions {
+ 
+ export { parseModelsListResponse } from "@cindy/model-providers";
+ 
++export function deriveModelsDiscoveryUrl(baseUrl: string, options?: { clientVersion?: string }): string {
++  const copilot = copilotModelsRequest(baseUrl);
++  if (copilot) return copilot.url;
++  const url = new URL(baseUrl);
++  url.hash = '';
++  let pathname = url.pathname;
++  while (pathname.length > 1 && pathname.endsWith('/')) pathname = pathname.slice(0, -1);
++  // Codex-compatible relays (including Sub2API) expose /models directly under
++  // /backend-api/codex; inserting /v1 makes discovery fail while inference works.
++  url.pathname = /(?:\/v\d+|\/backend-api\/codex)$/i.test(pathname)
++    ? `${pathname}/models`
++    : `${pathname === '/' ? '' : pathname}/v1/models`;
++  if (options?.clientVersion) url.searchParams.set('client_version', options.clientVersion);
++  return url.toString();
++}
++
++
+ /** Shared OAuth state machine; the launcher supplies only transport and presentation. */
+ export function createGenericOAuthService(ports: { fetchImpl: typeof fetch }) {
+ 
+@@ -863,21 +880,6 @@ async function runGenericOAuthLogin(
+  * 约定：Anthropic 兼容端点为 `{base}/v1/models`；OpenAI 兼容 baseUrl 常以 `/v1` 结尾，
+  * 此时只追加 `/models`。自定义 OAuth 供应商靠这条推导免去用户手填发现端点。
+  */
+-function deriveModelsDiscoveryUrl(baseUrl: string, options?: { clientVersion?: string }): string {
+-  const copilot = copilotModelsRequest(baseUrl);
+-  if (copilot) return copilot.url;
+-  const url = new URL(baseUrl);
+-  url.hash = '';
+-  let pathname = url.pathname;
+-  while (pathname.length > 1 && pathname.endsWith('/')) pathname = pathname.slice(0, -1);
+-  // Codex-compatible relays (including Sub2API) expose /models directly under
+-  // /backend-api/codex; inserting /v1 makes discovery fail while inference works.
+-  url.pathname = /(?:\/v\d+|\/backend-api\/codex)$/i.test(pathname)
+-    ? `${pathname}/models`
+-    : `${pathname === '/' ? '' : pathname}/v1/models`;
+-  if (options?.clientVersion) url.searchParams.set('client_version', options.clientVersion);
+-  return url.toString();
+-}
+ 
+ /**
+  * 拉取 models 发现端点（带 Bearer），解析 OpenAI / Anthropic `GET /models` 形状
+diff --git a/apps/desktop/src/main/maker-host/provider-model-fetch.desktop.ts b/apps/desktop/src/main/maker-host/provider-model-fetch.desktop.ts
+new file mode 100644
+index 0000000000..7356cafd18
+--- /dev/null
++++ b/apps/desktop/src/main/maker-host/provider-model-fetch.desktop.ts
+@@ -0,0 +1,54 @@
++/** Keep Desktop's OAuth token reader and default transport out of the shared fetcher. */
++import type { AgentKind, Provider } from '@cindy/model-providers';
++import { resolveCopilotAccountUrl } from './copilot-account-url.js';
++import { readGenericOAuthAccessToken } from './generic-oauth.desktop.js';
++import { outboundFetch } from './outbound-fetch.desktop.js';
++import { fetchProviderModels as fetchModels, type ProviderModelsFetchSpec, type ProviderModelsFetchResult } from './provider-model-fetch.js';
++export * from './provider-model-fetch.js';
++
++export function fetchProviderModels(spec: ProviderModelsFetchSpec, fetchImpl: typeof fetch = outboundFetch) {
++  return fetchModels(spec, fetchImpl);
++}
++
++/** Refresh a saved OAuth connection using only Main's route and credential snapshot. */
++export async function fetchSavedOAuthProviderModels(
++  provider: Provider | undefined,
++  agent: AgentKind,
++  storageProviderId: string,
++  isCurrent: () => boolean,
++  fetchImpl: typeof fetch = outboundFetch,
++  headers?: Record<string, string>,
++): Promise<ProviderModelsFetchResult> {
++  const oauth = provider?.auth.oauth;
++  const route = provider?.routing[agent];
++  if (provider?.source !== 'user' || provider.auth.method !== 'oauth' || !oauth || !route || route.disabled || !isCurrent()) {
++    return { ok: false, code: 'AUTH_INVALID' };
++  }
++  let token: string | null;
++  try {
++    token = await readGenericOAuthAccessToken(storageProviderId, oauth);
++  } catch {
++    return { ok: false, code: 'AUTH_INVALID' };
++  }
++  // A token refresh can outlive logout, account switching, or edits to this connection.
++  // Never use the old endpoint snapshot with credentials from the new owner/configuration.
++  if (!isCurrent()) return { ok: false, code: 'AUTH_INVALID' };
++  if (!token) return { ok: false, code: 'AUTH_INVALID' };
++  const modelsUrl = route.modelsUrl ?? oauth.modelsDiscoveryUrl;
++  const result = await fetchProviderModels({
++    agent,
++    baseUrl: resolveCopilotAccountUrl(route.upstream, token),
++    modelsUrl: modelsUrl ? resolveCopilotAccountUrl(modelsUrl, token) : modelsUrl,
++    wireProtocol: route.wireProtocol,
++    authMethod: 'oauth',
++    apiKey: token,
++    headers,
++    redirect: 'error',
++  }, async (url, init) => {
++    // Pagination and the separate speech catalog may run after the first reply.
++    // Revoke the captured credentials before another request if ownership changed.
++    if (!isCurrent()) throw new Error('Provider model refresh is no longer current');
++    return fetchImpl(url, init);
++  });
++  return isCurrent() ? result : { ok: false, code: 'AUTH_INVALID' };
++}
+diff --git a/apps/desktop/src/main/maker-host/provider-model-fetch.ts b/apps/desktop/src/main/maker-host/provider-model-fetch.ts
+index c7e95710ce..54a91e38a4 100644
+--- a/apps/desktop/src/main/maker-host/provider-model-fetch.ts
++++ b/apps/desktop/src/main/maker-host/provider-model-fetch.ts
+@@ -1,5 +1,5 @@
+ import { issueModelSourceSnapshot, modelSourceRequestSignature } from './model-source-snapshots.js';
+-import { copilotModelsRequest, resolveCopilotAccountUrl } from './copilot-account-url.js';
++import { copilotModelsRequest } from './copilot-account-url.js';
+ import { collectModelDiscoveryPages } from './model-discovery-pages.js';
+ import type { DiscoveredModel } from '@cindy/model-providers';
+ /**
+@@ -20,15 +20,10 @@ import {
+   isOpenRouterModelsUrl,
+   type AgentKind,
+   type ProviderWireProtocol,
+-  type Provider,
+ } from '@cindy/model-providers';
+ 
+ import { classifyProviderError, type ProviderErrorCode } from '../../shared/providerErrors.js';
+-import {
+-  deriveModelsDiscoveryUrl,
+-  readGenericOAuthAccessToken,
+-} from './generic-oauth.desktop.js';
+-import { outboundFetch } from './outbound-fetch.desktop.js';
++import { deriveModelsDiscoveryUrl } from './generic-oauth.js';
+ 
+ /** 拉取超时（与 test-connection 探测同量级）。 */
+ const FETCH_TIMEOUT_MS = 10_000;
+@@ -110,49 +105,6 @@ export interface ProviderModelsFetchResult {
+   detail?: string;
+ }
+ 
+-/** Refresh a saved OAuth connection using only Main's route and credential snapshot. */
+-export async function fetchSavedOAuthProviderModels(
+-  provider: Provider | undefined,
+-  agent: AgentKind,
+-  storageProviderId: string,
+-  isCurrent: () => boolean,
+-  fetchImpl: typeof fetch = outboundFetch,
+-  headers?: Record<string, string>,
+-): Promise<ProviderModelsFetchResult> {
+-  const oauth = provider?.auth.oauth;
+-  const route = provider?.routing[agent];
+-  if (provider?.source !== 'user' || provider.auth.method !== 'oauth' || !oauth || !route || route.disabled || !isCurrent()) {
+-    return { ok: false, code: 'AUTH_INVALID' };
+-  }
+-  let token: string | null;
+-  try {
+-    token = await readGenericOAuthAccessToken(storageProviderId, oauth);
+-  } catch {
+-    return { ok: false, code: 'AUTH_INVALID' };
+-  }
+-  // A token refresh can outlive logout, account switching, or edits to this connection.
+-  // Never use the old endpoint snapshot with credentials from the new owner/configuration.
+-  if (!isCurrent()) return { ok: false, code: 'AUTH_INVALID' };
+-  if (!token) return { ok: false, code: 'AUTH_INVALID' };
+-  const modelsUrl = route.modelsUrl ?? oauth.modelsDiscoveryUrl;
+-  const result = await fetchProviderModels({
+-    agent,
+-    baseUrl: resolveCopilotAccountUrl(route.upstream, token),
+-    modelsUrl: modelsUrl ? resolveCopilotAccountUrl(modelsUrl, token) : modelsUrl,
+-    wireProtocol: route.wireProtocol,
+-    authMethod: 'oauth',
+-    apiKey: token,
+-    headers,
+-    redirect: 'error',
+-  }, async (url, init) => {
+-    // Pagination and the separate speech catalog may run after the first reply.
+-    // Revoke the captured credentials before another request if ownership changed.
+-    if (!isCurrent()) throw new Error('Provider model refresh is no longer current');
+-    return fetchImpl(url, init);
+-  });
+-  return isCurrent() ? result : { ok: false, code: 'AUTH_INVALID' };
+-}
+-
+ /** origin 不含 userinfo；先独立验证地址，错误中不带原始 URL 或解析器异常。 */
+ function parseModelsFetchUrl(value: string): URL {
+   try {
+@@ -311,7 +263,7 @@ async function readLimitedBody(res: Response, limit: number): Promise<string> {
+ /** 拉一次模型列表并分类结果。fetch 可注入（单测）。 */
+ export async function fetchProviderModels(
+   spec: ProviderModelsFetchSpec,
+-  fetchImpl: typeof fetch = outboundFetch,
++  fetchImpl: typeof fetch,
+ ): Promise<ProviderModelsFetchResult> {
+   if (
+     spec.authMethod === 'none' &&
+diff --git a/apps/desktop/src/main/maker-ipc/__tests__/providerHandlers.test.ts b/apps/desktop/src/main/maker-ipc/__tests__/providerHandlers.test.ts
+index bc6a808915..e880c0c6f1 100644
+--- a/apps/desktop/src/main/maker-ipc/__tests__/providerHandlers.test.ts
++++ b/apps/desktop/src/main/maker-ipc/__tests__/providerHandlers.test.ts
+@@ -42,7 +42,7 @@ import {
+ } from '../../provider-import/providerImport.js';
+ import { throwIpcError } from '../../utils/ipcValidate.js';
+ import { MAKER_INVOKE, MAKER_PUSH } from '../channels.js';
+-import { registerProviderHandlers, type ProviderHandlerDeps } from '../providerHandlers.js';
++import { registerProviderHandlers, type ProviderHandlerDeps } from '../providerHandlers.desktop.js';
+ import { clearModelVisibilityMirror, waitForModelVisibilityMirror, getModelVisibilityMirrorSnapshot } from '../../maker-host/model-visibility-mirror.js';
+ import { extractIpcError } from '../../../renderer/utils/ipcError';
+ import * as providerPresentation from '../../maker-host/provider-presentation-store.js';
+diff --git a/apps/desktop/src/main/maker-ipc/providerHandlers.desktop.ts b/apps/desktop/src/main/maker-ipc/providerHandlers.desktop.ts
+new file mode 100644
+index 0000000000..2a00c7e563
+--- /dev/null
++++ b/apps/desktop/src/main/maker-ipc/providerHandlers.desktop.ts
+@@ -0,0 +1,22 @@
++/** Desktop platform bindings; the shared handlers never load Electron adapters. */
++import { withAvailabilityPolicyMutation } from '../device-link/providerShareAvailabilityPolicy.js';
++import { pruneProviderGroupBindings } from '../provider-group/bindings.desktop.js';
++import { writeProviderGroup } from '../provider-group/store.js';
++import { notifyManagedOllamaRemoved } from '../local-model-runtime/ipc.js';
++import { stopManagedLlamaCppService } from '../local-model-runtime/llamaCppService.js';
++import { registerProviderHandlers as registerSharedProviderHandlers, type ProviderHandlerDeps as SharedProviderHandlerDeps, type ProviderPlatformPorts } from './providerHandlers.js';
++import type { IpcHandlerRegistry } from './ipcHandlerRegistry.js';
++
++export type ProviderHandlerDeps = Omit<SharedProviderHandlerDeps, keyof ProviderPlatformPorts>;
++
++export function registerProviderHandlers(registry: IpcHandlerRegistry, deps: ProviderHandlerDeps) {
++  const ports: ProviderPlatformPorts = {
++    withAvailabilityPolicyMutation: (providerId, work) => withAvailabilityPolicyMutation(providerId, work),
++    writeProviderGroup: (providerId, config) => writeProviderGroup(providerId, config),
++    pruneProviderGroupBindings: (providerId, keepMemberKeys) => pruneProviderGroupBindings(providerId, keepMemberKeys),
++    notifyManagedOllamaRemoved: () => notifyManagedOllamaRemoved(),
++    stopManagedLlamaCppService: deleteConnection => stopManagedLlamaCppService(deleteConnection),
++  };
++  // Preserve live dependency readers supplied by the caller after registration.
++  return registerSharedProviderHandlers(registry, Object.assign(deps, ports));
++}
+diff --git a/apps/desktop/src/main/maker-ipc/providerHandlers.ts b/apps/desktop/src/main/maker-ipc/providerHandlers.ts
+index d132ff81b0..04fa0e7b53 100644
+--- a/apps/desktop/src/main/maker-ipc/providerHandlers.ts
++++ b/apps/desktop/src/main/maker-ipc/providerHandlers.ts
+@@ -1,15 +1,12 @@
+ import { isProviderShareAgentDeviceId } from '../../shared/providerShare.js';
+ import { remoteProviderDisableKey } from '@cindy/model-providers';
+ import { withoutProviderHeaderCredentials } from '../maker-host/provider-public-view.js';
+-import { withAvailabilityPolicyMutation } from '../device-link/providerShareAvailabilityPolicy.js';
+ import { bindModelSourceSnapshot, acceptsModelSourceSnapshot, modelSourceRequestSignature, issueModelSourceSnapshot } from '../maker-host/model-source-snapshots.js';
+ import { buildModelsFetchRequest } from '../maker-host/provider-model-fetch.js';
+ import { getProviderRouteCredentialRevision } from '../maker-host/provider-route.js';
+ import { appendSpeechModels, missingSpeechReference } from '../../shared/speechProviderSetup.js';
+ import { setProviderPresentation, retainProviderPresentationAfterAuthChange } from '../maker-host/provider-presentation-store.js';
+ import type { DeploymentDetectionResult } from '../../shared/providerDetection.js';
+-import { pruneProviderGroupBindings } from '../provider-group/bindings.desktop.js';
+-import { writeProviderGroup } from '../provider-group/store.js';
+ /**
+  * provider:* IPC handlers。
+  *
+@@ -50,8 +47,6 @@ import type {
+   CustomProviderUpdateOptions,
+   CustomProviderUpdateResult,
+ } from '../../shared/customProviderUpdate.js';
+-import { notifyManagedOllamaRemoved } from '../local-model-runtime/ipc.js';
+-import { stopManagedLlamaCppService } from '../local-model-runtime/llamaCppService.js';
+ import { MANAGED_LLAMACPP_PROVIDER_ID } from '../../shared/llamaCpp.js';
+ import { isIpcError } from '../../shared/ipc-errors.js';
+ import type {
+@@ -92,7 +87,7 @@ import {
+   CUSTOM_PROVIDER_RUNTIME_AGENTS,
+   splitCustomProviderHeaders,
+   type CustomProviderHeaderSecrets,
+-} from '../maker-host/custom-provider-header-secrets.js';
++} from '../maker-host/customProviderHeaderService.js';
+ import type {
+   ProviderProbeSpec,
+   ProviderTestInput,
+@@ -287,7 +282,15 @@ function oauthRuntimeEndpointSignature(config: CustomProviderConfig | null): str
+ }
+ 
+ 
+-export interface ProviderHandlerDeps {
++export interface ProviderPlatformPorts {
++  withAvailabilityPolicyMutation<T>(providerId: string | undefined, work: () => Promise<T>): Promise<T>;
++  writeProviderGroup(providerId: string, config: null): Promise<unknown>;
++  pruneProviderGroupBindings(providerId: string, keepMemberKeys: null): Promise<void>;
++  notifyManagedOllamaRemoved(): void;
++  stopManagedLlamaCppService(deleteConnection: () => Promise<void>): Promise<void>;
++}
++
++export interface ProviderHandlerDeps extends ProviderPlatformPorts {
+   /** Test seam: production reads known locations on this desktop, never renderer paths. */
+   localProviderSourceContext?: () => LocalSourceContext;
+   /**
+@@ -880,7 +883,7 @@ export function registerProviderHandlers(
+     beginProviderConfigMutation(providerId);
+     try {
+       await previous.catch(() => undefined);
+-      return await withAvailabilityPolicyMutation(providerId, () => operation(commitRouteMutation));
++      return await deps.withAvailabilityPolicyMutation(providerId, () => operation(commitRouteMutation));
+     } finally {
+       release();
+       if (providerConfigMutationTails.get(providerId) === tail) {
+@@ -1940,7 +1943,7 @@ export function registerProviderHandlers(
+       deps.broadcastChanged();
+       return { ok: true };
+     };
+-    return withAvailabilityPolicyMutation(disableKey, () => enqueueDisableWrite(run));
++    return deps.withAvailabilityPolicyMutation(disableKey, () => enqueueDisableWrite(run));
+   };
+   registry.handle(MAKER_INVOKE.MODEL_DISABLE_SET, async (event, input: unknown) => {
+     assertTrustedProviderMutationSender(event);
+@@ -2758,7 +2761,7 @@ export function registerProviderHandlers(
+                 throwIpcError('INTERNAL', 'failed to remove existing OAuth credentials');
+               }
+               await deleteCustomProvider(providerId);
+-              if (providerId === MANAGED_OLLAMA_PROVIDER_ID) notifyManagedOllamaRemoved();
++              if (providerId === MANAGED_OLLAMA_PROVIDER_ID) deps.notifyManagedOllamaRemoved();
+               assertProviderMutationOwner(ownerAtIngress);
+             } catch (err) {
+               assertProviderMutationOwner(ownerAtIngress);
+@@ -2783,10 +2786,10 @@ export function registerProviderHandlers(
+             assertProviderMutationOwner(ownerAtIngress);
+             deps.broadcastPricingChanged();
+             // 删除连接即删除它的供应商组(provider-groups.md §3)：同名重建会得到同一个 id，不能让旧组复活。
+-            await writeProviderGroup(providerId, null)
++            await deps.writeProviderGroup(providerId, null)
+               .then(() => {
+                 deps.kickProviderGroupReshare?.('provider-delete');
+-                return pruneProviderGroupBindings(providerId, null);
++                return deps.pruneProviderGroupBindings(providerId, null);
+               })
+               .catch((error) => {
+                 log.warn('provider group cleanup after provider deletion failed', {
+@@ -2798,7 +2801,7 @@ export function registerProviderHandlers(
+         };
+         if (providerId === MANAGED_LLAMACPP_PROVIDER_ID) {
+           try {
+-            await stopManagedLlamaCppService(deleteConnection);
++            await deps.stopManagedLlamaCppService(deleteConnection);
+           } catch {
+             throwIpcError('PRECONDITION_FAILED', 'LLAMACPP_STOP_FAILED');
+           }
+diff --git a/apps/desktop/src/main/maker-ipc/register.ts b/apps/desktop/src/main/maker-ipc/register.ts
+index f5e59cd270..38140cdebb 100644
+--- a/apps/desktop/src/main/maker-ipc/register.ts
++++ b/apps/desktop/src/main/maker-ipc/register.ts
+@@ -1275,7 +1275,7 @@ import {
+ } from './reviewStartHandler.js';
+ import { registerStopAgentTaskHandler } from './stopAgentTaskHandler.js';
+ import { registerStopSessionBackgroundTasksHandler } from './stopSessionBackgroundTasksHandler.js';
+-import { registerProviderHandlers } from './providerHandlers.js';
++import { registerProviderHandlers } from './providerHandlers.desktop.js';
+ import { readModelImageInputOverride, writeModelImageInputOverride } from '../maker-host/model-catalog-override-store.js';
+ import { createLocalCliScanDeps, scanLocalCliAuth } from './localCliDetect.js';
+ import { registerMcpHandlers } from './mcpHandlers.js';
+@@ -1332,7 +1332,7 @@ import {
+   setAccountUsageOwnerStampReader,
+   setAccountUsageProviderReader,
+ } from '../maker-host/provider-account-usage.js';
+-import { fetchProviderModels, fetchSavedOAuthProviderModels } from '../maker-host/provider-model-fetch.js';
++import { fetchProviderModels, fetchSavedOAuthProviderModels } from '../maker-host/provider-model-fetch.desktop.js';
+ import { detectProviderDeployment } from '../maker-host/provider-detection.js';
+ import {
+   beginProviderRouteMutation,
+diff --git a/apps/host/scripts/build.mjs b/apps/host/scripts/build.mjs
+index 0aa2a1d0b0..75d40adedb 100644
+--- a/apps/host/scripts/build.mjs
++++ b/apps/host/scripts/build.mjs
+@@ -132,7 +132,7 @@ function createNodePlugins(dependencies) { return [
+       // externalized as a Node package subpath containing Vite's query suffix.
+       if (args.path.endsWith('?raw') || args.pluginData?.hostRawAsset) return;
+       if (isBuiltin(args.path)) return { path: args.path, external: true };
+-      if (args.path === 'electron' || args.path.startsWith('electron/')) {
++      if (args.path === 'electron' || args.path.startsWith('electron/') || args.path === 'original-fs') {
+         throw new Error(`Node runtime imports Electron: ${path.relative(repo, args.importer)}`);
+       }
+       const name = packageName(args.path);
+diff --git a/apps/host/src/agent/provider-config.test.mjs b/apps/host/src/agent/provider-config.test.mjs
+new file mode 100644
+index 0000000000..7c03d001f7
+--- /dev/null
++++ b/apps/host/src/agent/provider-config.test.mjs
+@@ -0,0 +1,155 @@
++// #10644: exercise Host's production routes + reused Desktop handlers, using
++// in-memory SQLite and the real encrypted credential store with synthetic keys.
++// Existing auth and provider-route tests cannot create a provider through Host.
++// Minimal failures: missing caller, valid Pi config, invalid discovery URL,
++// credential write failure, and a caller retained across an owner generation.
++// Tier: integration (SQLite + temporary credential files; no network/CLI).
++// Standalone timing: coordinator to record. New file: provider-config had no test.
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import Database from 'better-sqlite3';
++import { drizzle } from 'drizzle-orm/better-sqlite3';
++import * as schema from '../../../desktop/src/main/localDb/schema.ts';
++import { createDbClientForHandle } from '../../../desktop/src/main/localDb/client/createDbClientForHandle.ts';
++import { clearCurrentDbClient, setCurrentDbClient } from '../../../desktop/src/main/localDb/client/current.ts';
++import { getCustomProvider } from '../../../desktop/src/main/maker-host/custom-provider-store.ts';
++import { getActiveCatalog, setCustomProviders } from '../../../desktop/src/main/maker-host/active-catalog.ts';
++import { configureAppDataDir } from '../../../desktop/src/main/userDataPath.ts';
++import { customProviderHeaderStorageKey, customProviderSecretStorageKey, providerOAuthStorageKey } from '../../../desktop/src/shared/providerSecrets.ts';
++import { dataOwnerStorageKey } from '../../../desktop/src/main/dataOwnerPath.ts';
++import { createCredentialStore } from '../credentials/store.mjs';
++import { createHostService } from '../service.mjs';
++import { hostOutbound } from '../outbound.mjs';
++import { lifoCleanup } from '../test-support/cleanup.mjs';
++import { configureHostOwner } from './claude-auth.mjs';
++import { createHostProviderConfig } from './provider-config.ts';
++import { createAvailabilityPolicy } from '../../../desktop/src/main/device-link/providerShareAvailabilityPolicyCore.ts';
++
++async function fixture(t) {
++  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'host-provider-create-'));
++  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
++  t.mock.method(os, 'homedir', () => root);
++  configureAppDataDir(path.join(root, 'app-data'));
++  const ownerId = 'provider-fixture';
++  configureHostOwner({ userDataDir: root, ownerId });
++  t.after(() => { setCustomProviders([]); configureHostOwner({ userDataDir: root, ownerId: null }); });
++  const db = new Database(':memory:');
++  db.exec(`CREATE TABLE custom_providers (
++    id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, runtimes TEXT NOT NULL DEFAULT '{}',
++    auth TEXT, sort_order INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
++  )`);
++  const client = createDbClientForHandle({ db, drizzle: drizzle(db, { schema }), dispose: async () => db.close() });
++  setCurrentDbClient(client, ownerId);
++  t.after(async () => { clearCurrentDbClient(client); await client.dispose(); });
++  const credentials = await createCredentialStore({ userDataDir: root, platform: 'linux', keyPromise: Promise.resolve(Buffer.alloc(16, 7)) });
++  const events = [];
++  const policy = createAvailabilityPolicy(async () => { throw new Error('Unexpected share revocation'); });
++  const config = createHostProviderConfig({ profileDir: root, ownerId, credentials,
++    withAvailabilityPolicyMutation: (id, work) => policy.withAvailabilityPolicyMutation(id, work),
++    openExternal: async () => { throw new Error('Unexpected browser request'); }, publish: (...args) => events.push(args) });
++  t.after(() => config.close());
++  const service = createHostService({ providerInvoke: config.invoke });
++  const invoke = (route, body, caller = 'web:fixture') => service(route, body, { caller });
++  const secretPath = logical => path.join(root, 'safe-storage', `owner_${dataOwnerStorageKey(ownerId)}_${logical}.enc`);
++  return { root, db, credentials, events, config, invoke, secretPath };
++}
++const createRoute = '/api/providers/custom/create';
++const fetchRoute = '/api/providers/models-fetch';
++const provider = id => ({ id, name: 'Fixture', runtimes: { pi: {
++  baseUrl: 'https://provider.example.test/v1', wireProtocol: 'openai-chat',
++  headers: { 'X-Fixture-Token': 'synthetic-header' }, models: [{ id: 'fixture-model', name: 'Fixture Model' }],
++} } });
++const discovery = { agent: 'pi', baseUrl: 'https://provider.example.test/v1', authMethod: 'apiKey', apiKey: 'synthetic-key', wireProtocol: 'openai-chat' };
++
++test('provider routes require an authenticated caller and expose only create and discovery', async t => {
++  const f = await fixture(lifoCleanup(t));
++  for (const route of [createRoute, fetchRoute]) {
++    assert.deepEqual(await f.invoke(route, {}, null), { status: 403, body: { error: 'authenticated_controller_required' } });
++  }
++  await assert.rejects(f.config.invoke('maker:provider:custom:delete', ['fixture'], 'web:fixture'), /UNSUPPORTED_CAPABILITY/);
++  assert.equal(f.db.prepare('SELECT count(*) AS count FROM custom_providers').get().count, 0);
++});
++
++test('create persists config and encrypted runtime secrets, refreshes catalog and rejects duplicate ids', async t => {
++  const f = await fixture(lifoCleanup(t));
++  const input = { config: provider('fixture'), keys: { pi: 'synthetic-key' } };
++  assert.deepEqual(await f.invoke(createRoute, input), { status: 200, body: { ok: true } });
++  const stored = await getCustomProvider('fixture');
++  assert.equal(stored.runtimes.pi.headers, undefined);
++  assert.equal(JSON.stringify(stored).includes('synthetic-key'), false);
++  for (const [logical, plaintext] of [
++    [customProviderSecretStorageKey('fixture', 'pi'), 'synthetic-key'],
++    [customProviderHeaderStorageKey('fixture', 'pi'), JSON.stringify(input.config.runtimes.pi.headers)],
++  ]) {
++    const encrypted = fs.readFileSync(f.secretPath(logical), 'utf8');
++    assert.equal(encrypted.includes(plaintext), false);
++    assert.equal(f.credentials.decrypt(encrypted), plaintext);
++  }
++  assert.equal(f.config.readKey('fixture', 'pi'), 'synthetic-key');
++  assert.ok(getActiveCatalog().providers.some(p => p.id === 'fixture'));
++  assert.equal(f.events.length, 1);
++  assert.equal(f.events[0][0], 'maker:provider:changed');
++  await assert.rejects(f.invoke(createRoute, input), /ALREADY_EXISTS/);
++});
++
++test('credential failure rolls staged secrets back without creating a config', async t => {
++  const f = await fixture(lifoCleanup(t));
++  const write = f.credentials.write;
++  t.mock.method(f.credentials, 'write', (key, value) => {
++    if (key.includes('header')) throw new Error('synthetic storage failure');
++    write(key, value);
++  });
++  await assert.rejects(f.invoke(createRoute, { config: provider('failed'), keys: { pi: 'synthetic-key' } }), /synthetic storage failure/);
++  assert.equal(await getCustomProvider('failed'), null);
++  assert.equal(fs.existsSync(f.secretPath(customProviderSecretStorageKey('failed', 'pi'))), false);
++  assert.deepEqual(f.events, []);
++});
++
++test('models-fetch applies Desktop validation and pins saved secret headers to the stored endpoint', async t => {
++  const f = await fixture(lifoCleanup(t));
++  const requests = [];
++  t.mock.method(hostOutbound, 'outboundFetch', async (url, init) => {
++    requests.push({ url: String(url), headers: new Headers(init.headers) });
++    return Response.json({ data: [{ id: 'fixture-model' }] });
++  });
++  await assert.rejects(f.invoke(fetchRoute, { input: { ...discovery, baseUrl: 'file:///etc/passwd' } }), /INVALID_PARAMS/);
++  assert.equal(requests.length, 0);
++  const result = await f.invoke(fetchRoute, { input: discovery });
++  assert.equal(result.body.ok, true);
++  assert.equal(result.body.models[0].id, 'fixture-model');
++  assert.equal(requests[0].headers.get('authorization'), 'Bearer synthetic-key');
++  await f.invoke(createRoute, { config: provider('saved'), keys: { pi: 'synthetic-key' } });
++  await f.invoke(fetchRoute, { input: { ...discovery, savedProviderId: 'saved', baseUrl: 'https://other.example.test' } });
++  assert.equal(requests.at(-1).url, 'https://provider.example.test/v1/models');
++  assert.equal(requests.at(-1).headers.get('x-fixture-token'), 'synthetic-header');
++});
++
++test('an old provider service cannot write after an account generation changes', async t => {
++  const f = await fixture(lifoCleanup(t));
++  configureHostOwner({ userDataDir: f.root, ownerId: 'other-owner' });
++  await assert.rejects(f.invoke(createRoute, { config: provider('stale'), keys: {} }), /PROVIDER_OWNER_CHANGED/);
++  assert.equal(await getCustomProvider('stale'), null);
++  assert.deepEqual(f.events, []);
++});
++
++// The common credential reader must keep strict OAuth reads throwing while
++// allowing explicit replacement of an undecryptable custom-provider snapshot.
++test('corrupt secrets stay distinct from absent credentials for strict reads and mutations', async t => {
++  const f = await fixture(lifoCleanup(t));
++  const keyFile = f.secretPath(customProviderSecretStorageKey('corrupt', 'pi'));
++  fs.mkdirSync(path.dirname(keyFile), { recursive: true });
++  fs.writeFileSync(keyFile, 'invalid-fixture-ciphertext');
++  const untouchedFile = f.secretPath(customProviderSecretStorageKey('untouched', 'pi'));
++  fs.writeFileSync(untouchedFile, 'invalid-fixture-ciphertext');
++  fs.writeFileSync(f.secretPath(providerOAuthStorageKey('corrupt')), 'invalid-fixture-ciphertext');
++  assert.throws(() => f.config.recipeSecretIo.readStrict('corrupt'), /cannot be decrypted/);
++  // Desktop create only stages keys explicitly supplied by the caller.
++  assert.equal((await f.invoke(createRoute, { config: provider('untouched'), keys: {} })).body.ok, true);
++  assert.equal(fs.readFileSync(untouchedFile, 'utf8'), 'invalid-fixture-ciphertext');
++  assert.throws(() => f.config.readKey('untouched', 'pi'));
++  assert.equal((await f.invoke(createRoute, { config: provider('corrupt'), keys: { pi: 'synthetic-replacement' } })).body.ok, true);
++  assert.equal(f.config.readKey('corrupt', 'pi'), 'synthetic-replacement');
++});
+diff --git a/apps/host/src/agent/provider-config.ts b/apps/host/src/agent/provider-config.ts
+index 6dd932a63e..b9fcd9c928 100644
+--- a/apps/host/src/agent/provider-config.ts
++++ b/apps/host/src/agent/provider-config.ts
+@@ -1,4 +1,8 @@
+-import { setCustomProviderKeyReader, setCustomProviderHeaderReader, setOAuthTokenReader, setProviderOAuthTokenReader, setProviderViewsReader } from '../../../desktop/src/main/maker-host/provider-route.js';
++import { registerProviderHandlers, type ProviderPlatformPorts } from '../../../desktop/src/main/maker-ipc/providerHandlers.js';
++import type { IpcHandler } from '../../../desktop/src/main/maker-ipc/ipcHandlerRegistry.js';
++import { MAKER_INVOKE, MAKER_PUSH } from '../../../desktop/src/main/maker-ipc/channels.js';
++import { fetchProviderModels } from '../../../desktop/src/main/maker-host/provider-model-fetch.js';
++import { beginProviderRouteMutation, setCustomProviderKeyReader, setCustomProviderHeaderReader, setOAuthTokenReader, setProviderOAuthTokenReader, setProviderViewsReader } from '../../../desktop/src/main/maker-host/provider-route.js';
+ import { createXaiProviderTokenReader } from '../../../desktop/src/main/maker-host/xaiProviderToken.js';
+ import { isXaiSubscriptionProviderId } from '../../../desktop/src/main/maker-host/subscription-account-kind.js';
+ import fs from 'node:fs';
+@@ -6,15 +10,15 @@ import { randomBytes } from 'node:crypto';
+ import path from 'node:path';
+ import { createCustomProviderHeaderService } from '../../../desktop/src/main/maker-host/customProviderHeaderService.js';
+ import { listCustomProviders, updateCustomProvider } from '../../../desktop/src/main/maker-host/custom-provider-store.js';
+-import { UNRECOVERABLE_PROVIDER_CREDENTIAL, parseCustomProviderHeaders } from '../../../desktop/src/main/secrets/providerCredentialState.js';
++import { UNRECOVERABLE_PROVIDER_CREDENTIAL, parseCustomProviderHeaders, type UnrecoverableProviderCredential } from '../../../desktop/src/main/secrets/providerCredentialState.js';
+ import { customProviderHeaderStorageKey, customProviderSecretStorageKey, providerOAuthStorageKey, providerSecretStorageKey, isBuiltinApiKeyProviderId, REMOTE_MCP_BRIDGE_TOKEN_STORAGE_KEY } from '../../../desktop/src/shared/providerSecrets.js';
+ import { getCurrentDbClientSnapshot } from '../../../desktop/src/main/localDb/client/current.js';
+ import { dataOwnerStorageKey } from '../../../desktop/src/main/dataOwnerPath.js';
+-import { activeOwnerScopeKey, isAppSessionBoundaryPending } from '../../../desktop/src/main/appSessionState.js';
++import { activeOwnerScopeKey, getActiveAppSession, isAppSessionBoundaryPending } from '../../../desktop/src/main/appSessionState.js';
+ import { createProviderService } from '../../../desktop/src/main/maker-host/provider-service.js';
+ import { hasCustomProviderCredential } from '../../../desktop/src/main/maker-host/provider-connection-state.js';
+ import { withoutProviderHeaderCredentials } from '../../../desktop/src/main/maker-host/provider-public-view.js';
+-import { loadCatalogWithSource, storedCustomProviderId, type CatalogSourceConfig } from '@cindy/model-providers';
++import { loadCatalogWithSource, storedCustomProviderId, isOrganizationManagedProvider, type CatalogSourceConfig } from '@cindy/model-providers';
+ import { createGenericOAuthService, type GenericOAuthStorage } from '../../../desktop/src/main/maker-host/generic-oauth.js';
+ import { createGrokOAuthService } from '../../../desktop/src/main/maker-host/grok-oauth-login.js';
+ import { hostOutbound, resolveHostOutboundProxy } from '../outbound.mjs';
+@@ -59,6 +63,7 @@ export function createHostCodexAccounts(
+ 
+ /** Owner-bound configuration and the existing encrypted header migration. */
+ export function createHostProviderConfig(options: { profileDir: string; ownerId: string; openExternal(url: string): Promise<void>;
++  withAvailabilityPolicyMutation?: ProviderPlatformPorts['withAvailabilityPolicyMutation'];
+   gatewayConnected?(): boolean; getCodexBinary?(): string | null; getClaudeBinary?(): string | null; publish?(channel: string, payload: unknown): void; credentials: {
+   decrypt(value: string): string; read(key: string): string | null;
+   write(key: string, value: string): void; remove(key: string): void;
+@@ -72,12 +77,17 @@ export function createHostProviderConfig(options: { profileDir: string; ownerId:
+       throw new Error('PROVIDER_OWNER_CHANGED');
+   };
+   const key = (logical: string) => { check(); return prefix + logical; };
+-  const readStrict = (logical: string): string | null => {
++  const readCredentialForMutation = (logical: string): string | null | UnrecoverableProviderCredential => {
+     let encrypted: string;
+     try { encrypted = fs.readFileSync(path.join(options.profileDir, 'safe-storage', `${key(logical)}.enc`), 'utf8'); }
+     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw new Error('Provider credential is unreadable'); }
+     try { return options.credentials.decrypt(encrypted); }
+-    catch { throw new Error('Provider credential cannot be decrypted'); }
++    catch { return UNRECOVERABLE_PROVIDER_CREDENTIAL; }
++  };
++  const readStrict = (logical: string): string | null => {
++    const value = readCredentialForMutation(logical);
++    if (typeof value === 'symbol') throw new Error('Provider credential cannot be decrypted');
++    return value;
+   };
+   const oauthStorage: GenericOAuthStorage = {
+     read: id => { check(); try { return readStrict(providerOAuthStorageKey(id)); } catch { return null; } },
+@@ -100,16 +110,14 @@ export function createHostProviderConfig(options: { profileDir: string; ownerId:
+     readStatus: readClaudeCliLoginStatusBySpawn,
+   });
+   const codexAccounts = createHostCodexAccounts(options, { owner, check, closed: () => closed });
+-  const headers = createCustomProviderHeaderService({
++  const headerPorts: Parameters<typeof createCustomProviderHeaderService>[0] = {
+     getCurrentDbClientUserId: () => { check(); return owner; },
+     listCustomProviders: async () => { check(); const rows = await listCustomProviders(); check(); return rows; },
+     updateCustomProvider: async (...args) => { check(); const row = await updateCustomProvider(...args); check(); return row; },
+     readCustomProviderHeadersForMutation(id, agent) {
+-      const file = path.join(options.profileDir, 'safe-storage', `${key(customProviderHeaderStorageKey(id, agent))}.enc`);
+-      let encrypted: string;
+-      try { encrypted = fs.readFileSync(file, 'utf8'); }
+-      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw new Error('Provider headers are unreadable'); }
+-      try { return parseCustomProviderHeaders(options.credentials.decrypt(encrypted)); }
++      const value = readCredentialForMutation(customProviderHeaderStorageKey(id, agent));
++      if (typeof value !== 'string') return value;
++      try { return parseCustomProviderHeaders(value); }
+       catch { return UNRECOVERABLE_PROVIDER_CREDENTIAL; }
+     },
+     storeCustomProviderHeaders(id, agent, value) {
+@@ -118,7 +126,8 @@ export function createHostProviderConfig(options: { profileDir: string; ownerId:
+     removeCustomProviderHeaders(id, agent) {
+       options.credentials.remove(key(customProviderHeaderStorageKey(id, agent))); return { success: true };
+     },
+-  });
++  };
++  const headers = createCustomProviderHeaderService(headerPorts);
+   const readKey = (id: string, agent: string) => options.credentials.read(key(customProviderSecretStorageKey(storedCustomProviderId(id), agent)));
+   const log = createLogger('host-provider-config');
+   let listGeneration = 0;
+@@ -149,7 +158,61 @@ export function createHostProviderConfig(options: { profileDir: string; ownerId:
+     grok.resetGrokOAuthMemoryCache();
+     await codexAccounts.close();
+   };
++  const handlers = new Map<string, IpcHandler>();
++  const unsupported = (): never => { throw new Error('[UNSUPPORTED_CAPABILITY] Host provider operation is not exposed'); };
++  registerProviderHandlers({ handle: (channel, handler) => {
++    if (channel === MAKER_INVOKE.PROVIDER_CUSTOM_CREATE || channel === MAKER_INVOKE.PROVIDER_MODELS_FETCH)
++      handlers.set(channel, handler);
++  } }, {
++    isOrganizationManagedProviderId: id => getActiveCatalog().providers.some(provider =>
++      provider.id === id && isOrganizationManagedProvider(provider)),
++    refreshCatalog: async () => { await list(); },
++    beginRouteMutation: id => beginProviderRouteMutation(id),
++    broadcastChanged: () => { check(); options.publish?.(MAKER_PUSH.PROVIDER_CHANGED, undefined); },
++    listPresets: () => getActiveCatalog().presets ?? [],
++    getModelCatalog: getActiveCatalog,
++    fetchModels: spec => fetchProviderModels(spec, hostOutbound.outboundFetch),
++    assertTrustedSender: caller => { check(); if (typeof caller !== 'string' || !caller) throw new Error('Authenticated provider controller is required'); },
++    currentOwnerSession: () => { check(); return getActiveAppSession(); },
++    readCustomProviderKeyForMutation: (id, agent) => readCredentialForMutation(customProviderSecretStorageKey(id, agent)),
++    storeCustomProviderKey: (id, agent, value) => {
++      options.credentials.write(key(customProviderSecretStorageKey(id, agent)), value); return true;
++    },
++    removeCustomProviderKey: (id, agent) => {
++      options.credentials.remove(key(customProviderSecretStorageKey(id, agent))); return { success: true };
++    },
++    readCustomProviderHeadersForMutation: headerPorts.readCustomProviderHeadersForMutation,
++    storeCustomProviderHeaders: headerPorts.storeCustomProviderHeaders,
++    removeCustomProviderHeaders: headerPorts.removeCustomProviderHeaders,
++    readSavedProviderRoute: (id, agent) => {
++      check();
++      const provider = getActiveCatalog().providers.find(provider => provider.id === id && provider.source === 'user');
++      const route = provider?.routing[agent];
++      return route && !route.disabled ? { baseUrl: route.upstream, modelsUrl: route.modelsUrl ?? null } : null;
++    },
++    withAvailabilityPolicyMutation: (id, work) => {
++      if (!options.withAvailabilityPolicyMutation) return unsupported();
++      return options.withAvailabilityPolicyMutation(id, work);
++    },
++    writeProviderGroup: unsupported, pruneProviderGroupBindings: unsupported,
++    notifyManagedOllamaRemoved: unsupported, stopManagedLlamaCppService: unsupported,
++    listProviders: unsupported, getModelVisibilityOverrides: unsupported,
++    listProviderIds: unsupported, setProviderOrder: unsupported, getProviderOrder: unsupported,
++    testConnection: unsupported, accountUsage: unsupported, refreshBuiltinModels: unsupported,
++    requestModelsAutoRefresh: unsupported, rediscoverModels: unsupported,
++    oauthLogin: unsupported, oauthLogout: unsupported, oauthCancel: unsupported, removeOAuthCredentials: unsupported,
++    scanLocalCli: unsupported, setModelsDisabled: unsupported, setProviderDisabled: unsupported,
++    getLedgerCurrency: unsupported, readModelPriceOverride: unsupported, writeModelPriceOverride: unsupported,
++    clearModelPriceOverride: unsupported, broadcastPricingChanged: unsupported,
++  });
+   const api = {
++    async invoke(channel: string, args: unknown[], caller: string) {
++      check();
++      if (!caller) throw new Error('Authenticated provider controller is required');
++      const handler = handlers.get(channel);
++      if (!handler) throw new Error('[UNSUPPORTED_CAPABILITY] Unknown Host provider operation');
++      const result = await handler(caller, ...args); check(); return result;
++    },
+     list, readKey, oauth, grok, builtinStore, recipeSecretIo: oauthStorage, codexAccounts, claudeNative, cancelLogins,
+     async close() {
+       closed = true;
+diff --git a/apps/host/src/main.ts b/apps/host/src/main.ts
+index ed91faa4ed..a844a5f1e4 100644
+--- a/apps/host/src/main.ts
++++ b/apps/host/src/main.ts
+@@ -563,6 +563,10 @@ async function ensureRuntime(ownerId: string, heldLease?: HostRuntimeLease): Pro
+   const credentials = await createCredentialStore({ userDataDir: dataDir,
+     keyringApplication: process.env.CINDY_HOST_KEYRING_APPLICATION?.trim() || undefined });
+   providerConfig = createHostProviderConfig({ profileDir: dataDir, ownerId, credentials,
++    withAvailabilityPolicyMutation: (id, work) => {
++      if (!availabilityPolicy) throw new Error('Provider availability policy is not initialized');
++      return availabilityPolicy.withAvailabilityPolicyMutation(id, work);
++    },
+     gatewayConnected: () => Boolean(currentGateway()),
+     getCodexBinary: () => harnessBinaryPath('codex'),
+     getClaudeBinary: () => harnessBinaryPath('claude-code'),
+@@ -1505,6 +1509,10 @@ const serverDeps = {
+     defaultModel: process.env.CINDY_HOST_MODEL?.trim(),
+   }),
+   providers: () => listProviders({ gateway: currentGateway(), ownerId: runtime.owner }),
++  providerInvoke: (channel: string, args: unknown[], caller: string) => {
++    if (!providerConfig) throw new Error('Provider configuration is not initialized');
++    return providerConfig.invoke(channel, args, caller);
++  },
+   // The agent's own capability descriptor; no second catalog is invented here.
+   // Gateway credential state, reported from the same facts the runtime uses.
+   // The renderer asks this synchronously at boot; the desktop proxies it from
+diff --git a/apps/host/src/service.mjs b/apps/host/src/service.mjs
+index c93267dc58..566e4f3f94 100644
+--- a/apps/host/src/service.mjs
++++ b/apps/host/src/service.mjs
+@@ -181,6 +181,15 @@ export function createHostService(deps) {
+     if (url.pathname === '/api/providers') {
+         return { status: 200, body: await deps.providers() };
+     }
++    const providerChannel = {
++      '/api/providers/custom/create': 'maker:provider:custom:create',
++      '/api/providers/models-fetch': 'maker:provider:models-fetch',
++    }[pathname];
++    if (providerChannel) {
++        if (!context.caller) return { status: 403, body: { error: 'authenticated_controller_required' } };
++        return { status: 200, body: await deps.providerInvoke(providerChannel,
++          pathname === '/api/providers/custom/create' ? [body.config, body.keys, body.options] : [body.input], context.caller) };
++    }
+     if (url.pathname === '/api/agents/auth-state') {
+         return { status: 200, body: await deps.agentAuthState(body.agentKind) };
+     }
+diff --git a/apps/host/src/web-shim.test.mjs b/apps/host/src/web-shim.test.mjs
+index e414047ed4..3b737dd081 100644
+--- a/apps/host/src/web-shim.test.mjs
++++ b/apps/host/src/web-shim.test.mjs
+@@ -533,6 +533,26 @@ test('signed-out protocol-2 streams stay idle through hidden events and reconcil
+   assert.deepEqual(b.redirects, []);
+ });
+ 
++// #10644: the wizard previously rejected create and silently returned null for
++// discovery. Public shim methods must preserve all preload arguments/results.
++// Tier: unit; existing auth aliases do not exercise these provider operations.
++test('the web provider wizard forwards create and discovery through the shared contract', async () => {
++  const b = browser(url => url.endsWith('/create') ? { ok: true } : { ok: true, models: [{ id: 'fixture-model' }] });
++  const config = { id: 'fixture', runtimes: { pi: { baseUrl: 'https://fixture.example.test/v1' } } };
++  const keys = { pi: 'synthetic-key' };
++  const options = { source: 'manual-settings' };
++  const input = { agent: 'pi', baseUrl: 'https://fixture.example.test/v1', authMethod: 'apiKey', apiKey: 'synthetic-key' };
++  assert.equal((await b.api.maker.createCustomProvider(config, keys, options)).ok, true);
++  assert.equal((await b.api.maker.fetchProviderModels(input)).models[0].id, 'fixture-model');
++  assert.deepEqual(b.calls.map(({ url, body }) => ({ url, body })), [
++    { url: '/api/providers/custom/create', body: { config, keys, options } },
++    { url: '/api/providers/models-fetch', body: { input } },
++  ]);
++  assert.ok(b.calls.every(call => call.credentials === 'same-origin'));
++  for (const method of ['updateCustomProvider', 'deleteCustomProvider', 'disconnectCustomProvider'])
++    await assert.rejects(b.api.maker[method]('fixture'), /HOST_CHANNEL_UNSUPPORTED/);
++});
++
+ // fnOS VM #10600: in-process login reached generation 3, but the cached claim
+ // stayed at generation 1 and left modelVisibilityPrefs in owner-pending. The
+ // public shim boundary is sufficient; no renderer/React harness is needed.
+diff --git a/docs/dev-rules/protocol-compatibility/host-custom-provider-create.md b/docs/dev-rules/protocol-compatibility/host-custom-provider-create.md
+new file mode 100644
+index 0000000000..13350c0208
+--- /dev/null
++++ b/docs/dev-rules/protocol-compatibility/host-custom-provider-create.md
+@@ -0,0 +1,25 @@
++# Host 自定义供应商创建与模型发现
++
++独立 Host 通过 `hostChannelContract.ts` 增量提供两个契约通道：
++
++| Desktop / Device Link channel | Web API | Host POST 路径与请求体 |
++| --- | --- | --- |
++| `maker:provider:custom:create` | `maker.createCustomProvider(config, keys, options?)` | `/api/providers/custom/create`：`{ config, keys, options }` |
++| `maker:provider:models-fetch` | `maker.fetchProviderModels(input)` | `/api/providers/models-fetch`：`{ input }` |
++
++两个入口均要求传输层认证的 `context.caller`，缺席返回 403
++`authenticated_controller_required`；请求体不提供控制端身份。沿用 Host 的 owner
++准入与 Desktop `registerProviderHandlers` 校验、mutation queue、凭据暂存回滚及
++owner generation 校验。配置写入现有 `custom_providers`，API Key 与请求头写入现有
++owner 隔离的加密凭据存储；成功后刷新目录并发布 `maker:provider:changed`。
++模型发现沿用 Desktop 的输入校验及已存请求头的端点绑定，不将密文头交回浏览器。
++
++这是旧契约上的加法，不修改通用 `/api/ipc` 只读登记表，不增加 relay wire 字段。
++新 Host 兼容旧客户端；新客户端连接旧 Host 时接口不可用，需升级 Host，不回退直接写库
++或向客户端暴露已存秘密。写操作不新增自动重放；重复创建相同 ID 按现有逻辑拒绝。
++更新、删除与断开通道未接入，仍显式不支持。
++
++实现：`apps/host/src/agent/provider-config.ts`、`apps/host/src/service.mjs`。
++回归：`apps/host/src/agent/provider-config.test.mjs`、`apps/host/src/web-shim.test.mjs`、
++`packages/maker-shared/src/__tests__/hostChannelContract.test.ts`。
++真实 NAS 添加供应商、拉取模型与流式回复仍须实机验收；单测不代表部署或发行已完成。
+diff --git a/packages/maker-shared/src/__tests__/hostChannelContract.test.ts b/packages/maker-shared/src/__tests__/hostChannelContract.test.ts
+index 8e5cc68735..6847c1a39b 100644
+--- a/packages/maker-shared/src/__tests__/hostChannelContract.test.ts
++++ b/packages/maker-shared/src/__tests__/hostChannelContract.test.ts
+@@ -66,3 +66,24 @@ it('keeps privileged browser settings out of the web adapter', async () => {
+   await handlers['auth.logout']();
+   expect(requests).toEqual(['/api/auth/logout']);
+ });
++
++// #10644: exercise the exported client adapter, preserving preload's three
++// create arguments and structured discovery failure. Existing contracts omitted
++// both routes. Tier: unit; no credentials or network.
++it('forwards custom provider creation and discovery without changing their results', async () => {
++  const calls: unknown[] = [];
++  const handlers = createHostChannelHandlers(async (...args) => {
++    calls.push(args);
++    return args[0].endsWith('/create') ? { ok: true } : { ok: false, code: 'AUTH' };
++  });
++  const config = { id: 'fixture' };
++  const keys = { pi: 'synthetic-key' };
++  const options = { source: 'manual-settings' };
++  const input = { agent: 'pi', baseUrl: 'https://fixture.example.test/v1' };
++  expect(await handlers['maker.createCustomProvider']([config, keys, options])).toEqual({ ok: true });
++  expect(await handlers['maker.fetchProviderModels']([input])).toEqual({ ok: false, code: 'AUTH' });
++  expect(calls).toEqual([
++    ['/api/providers/custom/create', { config, keys, options }, 'POST'],
++    ['/api/providers/models-fetch', { input }, 'POST'],
++  ]);
++});
+diff --git a/packages/maker-shared/src/hostChannelContract.ts b/packages/maker-shared/src/hostChannelContract.ts
+index 3ca113b219..c3031d19e0 100644
+--- a/packages/maker-shared/src/hostChannelContract.ts
++++ b/packages/maker-shared/src/hostChannelContract.ts
+@@ -172,6 +172,18 @@ export const HOST_CONTRACT_CHANNELS: readonly HostChannelDef[] = [
+     hostPath: '/api/providers',
+     body: () => null,
+   },
++  {
++    desktopChannel: 'maker:provider:custom:create',
++    webPath: 'maker.createCustomProvider',
++    hostPath: '/api/providers/custom/create',
++    body: ([config, keys, options]) => ({ config, keys, options }),
++  },
++  {
++    desktopChannel: 'maker:provider:models-fetch',
++    webPath: 'maker.fetchProviderModels',
++    hostPath: '/api/providers/models-fetch',
++    body: ([input]) => ({ input }),
++  },
+   {
+     desktopChannel: 'maker:auth:get-state',
+     webPath: 'maker.auth.getState',

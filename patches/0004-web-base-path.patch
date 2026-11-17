@@ -9,12 +9,11 @@ before the shim loads (a trailing slash is ignored). Unset or empty keeps
 today's paths exactly; a value that is not a same-origin path (URL, //host,
 backslash) is ignored. The renderer's own assets are handled by building it
 with Vite --base; nothing in this patch is specific to one proxy.
-Upstream: issue https://github.com/makecindy/cindy/issues/10614, PR not yet
-submitted (branch feat/web-base-path).
+Upstream: issue https://github.com/makecindy/cindy/issues/10614, PR https://github.com/makecindy/cindy/pull/11047
 Remove when: upstream web shim supports a path prefix (by this or another
 mechanism) without this patch.
 diff --git a/apps/host/src/web-shim.test.mjs b/apps/host/src/web-shim.test.mjs
-index 1024fd4645..31aa84c568 100644
+index 35cd9e02f9..15d1ed4114 100644
 --- a/apps/host/src/web-shim.test.mjs
 +++ b/apps/host/src/web-shim.test.mjs
 @@ -31,7 +31,7 @@ function browser(respond = () => ({}), script = source, openEvents = (_url, { si
@@ -59,9 +58,9 @@ index 1024fd4645..31aa84c568 100644
 +  }
 +});
 +
- test('plugin approval and confirmation use the authenticated Host routes', async () => {
+ test('installation and business confirmations use the authenticated Host routes', async () => {
    const b = browser(() => ({ granted: true, handled: true }));
-   assert.equal((await b.api.ghosts.requestTaskApproval('demo', 'host-tools:terminal')).granted, true);
+   await b.api.ghosts.resolveInstallConsent('group-request', true);
 diff --git a/apps/web/shim.js b/apps/web/shim.js
 index a77af345ea..b344ebe96b 100644
 --- a/apps/web/shim.js
