@@ -28,7 +28,7 @@
 
 Web 登录页隐藏面板内的跳过按钮及准备／离线／错误态底部入口，保留原布局尺寸。Light / Dark 共享相同显隐条件，不新增颜色或样式。
 
-截图／录屏：未取得。Linux 构建机无显示环境，UI 检查启动 Electron 时失败（`Process failed to launch!`）；Light / Dark 均未完成实机目检。
+截图：已完成 fnOS VM 独立 Host 网页端 Light 模式目检，见下方「手工验证」；Dark 模式尚未目检。Linux 构建机无显示环境，自动 UI 检查启动 Electron 时失败（`Process failed to launch!`）。
 
 - 引用的设计规范：`docs/design-rules/login-flow.md` §16.2（登录面板几何保持不变）、§16.3（复用现有登录组件与入口）；`docs/design-rules/DESIGN.md` §10 Light / Dark 双模式交付门槛。隐藏条件同时应用两模式，未改 token；是否完成目检以验证记录为准。入口收敛依据 `docs/host/basic-web.md`「每个仍可点击的未支持入口须明确不可用，不能静默吞掉操作」。
 
@@ -75,16 +75,20 @@ Red/Green：main 生产代码搭配本次新测试时，shim 的本地进入拒�
 
 ### 手工验证
 
-待协调者补充平台与完整登录页路径；尚无实机验证结果。
+协调者在 fnOS VM 上验证独立 Host 网页端，使用含提交 `a61f3c8` 的 fpk `0.1.4`：打开 Cindy 原版登录页（Light 模式），确认面板内和底部均没有「跳过登录」入口。
+
+![fnOS VM 独立 Host 网页登录页（Light）：面板和底部均无跳过登录入口](./login-page-no-skip-entry.png)
+
+截图中的窗口标题栏和外框属于 fnOS 桌面窗口，内容为 Cindy 原版登录页，本项目未添加页面元素。页面邮箱输入框来自 #10600 第一阶段尚未接通的验证码登录，与本 PR 无关。本次只验证入口隐藏，不代表完整登录链路通过。
 
 读写开销：新增判断读取现有同步客户端标识，不新增 IPC、HTTP、扫描、事务、轮询或订阅。浏览器端被移除的入口不再触发动作；直接调用 shim 则在本地拒绝，新增回归断言该调用产生 0 次 HTTP 请求。不涉及通知或后台生命周期变化。
 
 ### 未执行的验证
 
 - 本机无 `node_modules`，按协调工作流不运行完整测试、构建或安装依赖；上述 Linux 检查由协调者串行执行并已完成最终提交的 Desktop 类型检查和同组 Vitest 复跑。
-- Linux 的 `pnpm ui:check --changed --theme all` 因无显示环境、Electron 启动失败而未完成，未取得 Light / Dark UI 验证结果。
-- Web 与 Desktop 的完整登录／协议门实机操作、Light / Dark 目检尚未执行；未发布截图。
-- macOS／Windows／Linux 发行包及 fnOS 实包尚未验证；没有使用真实账号、创建 owner 数据库或调用模型。
+- Linux 的 `pnpm ui:check --changed --theme all` 因无显示环境、Electron 启动失败而未完成；另已取得上述 fnOS VM 的 Light 模式实包截图，Dark 模式尚未目检。
+- Web 与 Desktop 的完整登录／协议门实机操作尚未执行；Desktop 实机目检尚未执行。
+- macOS／Windows／Linux 发行包尚未验证；fnOS fpk `0.1.4` 仅验证了上述网页登录页入口隐藏，没有使用真实账号、创建 owner 数据库或调用模型。
 - 未推送、创建 PR、发布素材或修改 issue；此文件仅为 PR 草稿。
 
 ## 风险
@@ -106,6 +110,8 @@ Red/Green：main 生产代码搭配本次新测试时，shim 的本地进入拒�
 - 影响范围：浏览器登录页显隐和网页 shim 的直接本地模式调用。桌面原生登录能力、协议同意顺序及 owner 切换实现保留；相关 Linux 单元回归和 Desktop 类型检查已通过，实机验证限制见上文。
 - 回滚 / 降级方式：回退本次提交即可恢复原行为；不修改持久数据、凭据、数据库或 wire protocol，无数据迁移。
 - 边界：本次未让 Host 支持免账号使用；浏览器端需使用 Host 已支持的认证方式。已构建的旧 renderer 需更新至本次源码构建后才会隐藏入口。
+
+本 PR 与同时提交的 #10614（子路径）、#10600（网页登录）、#10644（自定义供应商）对应的 PR 均修改 `apps/web/shim.js` 及其测试，彼此会有文本冲突；无论合入顺序如何，其余 PR 均由提交者跟进变基。
 
 ### 提交前检查
 

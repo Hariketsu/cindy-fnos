@@ -1,12 +1,11 @@
 # PR 草稿：网页端支持部署在反向代理的子路径下
 
-> 状态：**草稿**，待用户审阅。「手工验证」一节要等 VM 实测后补齐。
+> 状态：**草稿**，变基后自动验证已通过，待用户审阅。
 > 关联 issue：makecindy/cindy#10614（分诊机器人已建议推进并欢迎提交 PR）
-> 分支：本地 `.upstream/cindy` 中的 `feat/web-base-path`，基于上游 `main`（`b975dc3`），1 个 commit，带 DCO 签名。
+> 分支：`feat/web-base-path`，基于上游 `origin/main`（`fe0daea10e`），单个 DCO 提交 `25d5629441`。
 > 模板：上游 `.github/PULL_REQUEST_TEMPLATE.md`
-> 本地补丁 `patches/0004-web-base-path.patch` 由这个分支导出（集成分支 `fnos-integration` 基于 `ae78647`，按 0002→0004 叠加）。
-> 与 #10598 的关系：两者都改 `shim.js` 和 `web-shim.test.mjs`，但改动位置不重叠，按任意顺序叠加都没有冲突（已在集成分支上验证）。
-> 验证数据均为实测（2026-11-15，linux-arm64，Debian 12，Node 22.22.3，pnpm 11.28.9）。
+> 2026-11-17 变基：`shim.js` 自动合并；`web-shim.test.mjs` 保留主干的安装/业务确认测试（不恢复已移除的 `requestTaskApproval`），加入两个子路径测试。保留主干启动检查、模型组读取等既有修复。
+> 历史本地补丁与旧集成分支不作为本次变基验证依据；测试结果由协调端在 Linux 构建机补齐（2026-11-17，提交 `25d5629441`）。
 
 ---
 
@@ -48,16 +47,18 @@
 
 ```text
 cd apps/host && node --import tsx --import ./src/loaders/register-raw.mjs --test src/web-shim.test.mjs
-结果：18 pass，0 fail，约 0.3 秒
-（只保留新测试、换回 main 的 shim.js：17 pass，1 fail，失败的是前缀用例；
-  换成不做校验、直接使用 __CINDY_BASE__ 的实现：17 pass，1 fail，失败的是校验用例）
+结果：20/20 通过，命令墙钟 0s（协调端秒级计时，不足一秒）
 pnpm --filter @cindy/host test
-结果：448 pass，0 fail
+结果：520/520 通过，37s
+NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @cindy/host typecheck
+结果：PASS，44s
 pnpm check:test-hygiene
-结果：PASS（341 files within baseline）
+结果：PASS，336 files，27s
 pnpm check:dev-docs
-结果：11 pass，0 fail
+结果：11/11 通过，1s
 ```
+
+以上由协调端在 Linux 构建机串行执行；本机仅完成 diff 与 DCO 检查，未安装依赖、未运行测试。
 
 测试价值（`web-shim.test.mjs`，补充到现有文件）
 - 生产入口与可观察结果：浏览器 shim 公开的 `window.electronAPI`（`auth.getState`、`maker.send`、`authLogout`）和它自动建立的事件流；可观察结果是发出的请求地址和退出后的跳转地址。
@@ -67,15 +68,21 @@ pnpm check:dev-docs
   - 前缀 `'/cindy/'`：一次 RPC、一次 `maker.send`、事件流和一次退出，地址必须是 `/cindy/api/auth/state`、`/cindy/chat`、`/cindy/events?…`、`/cindy/api/auth/logout`，跳转到 `/cindy/connect`（修改前全部是根路径）；
   - 不合法的值（`https://evil.example`、`//evil.example`、`/\evil.example`、非字符串）：表驱动，请求和跳转必须保持根路径（直接使用该值的实现会跳到外站）。
 - tier：unit，复用文件内已构建的 shim，无 I/O 和 socket。
-- 实测耗时：单独运行该文件约 0.3 秒（墙钟）。
+- 实测耗时：协调端报告变基后单独运行该文件 0s（秒级计时，不足一秒）。
 
 ### 手工验证
 
-（待 VM 实测后补齐）计划：在飞牛 fnOS 1.2.1010（linux-arm64）虚拟机中，用本分支构建的 renderer（`--base=/app/cindy/`）和 Host 发行包，经飞牛应用网关在 `/app/cindy/` 下访问：首页加载、登录后发送一条消息并收到流式回复、退出登录，记录请求是否全部留在前缀内。
+协调端已在 fnOS VM 实测 fpk `0.1.4`：Host 使用 `CINDY_WEB_BASE=/app/cindy/` 构建，补丁集等于集成分支 `900a2e5f70`，其中本 PR 的子路径部分等于 `25d5629441`。
+
+Cindy 通过飞牛应用网关挂在 `/app/cindy/` 下；Adapter（本项目的反向代理）去掉前缀后转发，并设置 `window.__CINDY_BASE__`。Adapter 日志确认页面的 `/api/*`、`/events`、`/chat` 及静态资源请求全部经由该前缀到达。登录、模型选择、发送消息、流式回复、权限确认、停止、登出均正常。登出后不再跳转是 #10600 决定的组合行为，见 #10600；本 PR 单独的退出跳转行为仍由上述单元测试覆盖。
+
+子路径下模型选择器正常工作的截图（fnOS 外框内为 Cindy 原版界面）：
+
+![fnOS 子路径下的 Cindy 模型选择器](../07-host-web-login/after-fix-model-picker.png)
 
 ### 未执行的验证
 
-- Nginx / Caddy 等通用反向代理：只在飞牛应用网关（加上我们自己的代理层）上实测，没有用通用反向代理按文档部署过。
+- 其他反向代理（nginx / Caddy）未实测。
 - Host 自带的网页配对流程：经代理部署时不走配对页（见「明确不包含」）。
 - Windows / macOS：改动只在浏览器端的 shim 中，与 Host 所在平台无关，未分平台验证。
 
@@ -89,6 +96,8 @@ pnpm check:dev-docs
 
 - 影响范围：只影响浏览器 shim 拼出来的请求地址和退出跳转地址；未设置 `__CINDY_BASE__` 时所有地址与现在相同。Desktop 不加载 shim。
 - 回滚 / 降级方式：回退本 commit 即可。
+
+本 PR 与同时提交的 #10600（网页登录）、#10601（隐藏跳过登录）、#10644（自定义供应商）对应的 PR 均修改 `apps/web/shim.js` 及其测试，彼此会有文本冲突；无论先合入哪一个，其余 PR 都由提交者跟进变基。
 
 ### 提交前检查
 
