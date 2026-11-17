@@ -35,6 +35,7 @@
 | 与飞牛桌面是否同源 | **同源**：应用页面可以读取 `window.top.location`，也能访问飞牛桌面的 DOM | **安全风险**：如果 Cindy 页面里执行了恶意脚本，它就能以当前用户的身份操作整个飞牛桌面。Agent 生成的内容必须继续在上游的沙箱中渲染，Adapter 也要设置严格的 CSP。见 architecture.md 的安全边界 |
 | HTTP 下的安全上下文 | `isSecureContext=false`，因此没有 `crypto.randomUUID` 和 `navigator.clipboard` | Cindy 的 shim 已经为这两个功能提供了替代实现。HTTPS（5667 端口）还没有测试 |
 | localStorage、BroadcastChannel | 都可以使用 | — |
+| `window.open` 弹窗 | 应用页面在用户点击时调用 `window.open` 能正常打开新标签页，没有被拦截（2026-11-17，国际版 Apple 登录） | Cindy 原版登录页的浏览器授权可以直接在飞牛窗口里用 |
 
 ## 入口
 
@@ -94,6 +95,16 @@
 | btrfs 存储空间 | 用户可以在创建存储空间时选择 btrfs；挂载参数 `discard=async,trimacl,space_cache=v2` | 实测同一份 Host 产物（表面大小 1970MiB，约 29.8 万个文件）占用 **2691MiB**，解压耗时 18 秒；ext4（64KB 簇）上约 24GB。日常开发装在 btrfs 上 |
 | 系统盘（`/`） | ext4，4KB 块；安装后约 63GB，其中已用约 12GB | `install_type=root` 可以把应用装到系统分区，但真实 NAS 的系统分区可能更小，需要评估 |
 
+## 应用生命周期（2026-11-17，开发 VM，fpk 0.1.4 → 0.1.5）
+
+| 操作 | 实测结果 |
+|---|---|
+| 应用中心「手动安装 → 从电脑上传」升级 | 可行（由人在界面上操作）：版本 0.1.4 → 0.1.5，`TRIM_PKGVAR` 中的数据、`TRIM_PKGETC` 中的凭据密钥（内容和修改时间都不变）、登录状态、已保存的供应商和会话全部保留；停止到重新启动约 17 秒 |
+| `fnos-cli app install-fpk` 覆盖安装更高版本 | 失败，错误码 `10236`「应用已存在」（2026-11-15）；`app update` 只能从应用中心来源下载 |
+| `fnos-cli app uninstall` | 没有 `--dry-run`，执行即卸载 |
+| `fnos-cli power reboot` | 一次重启后 VM 黑屏 6 分钟以上，网络不通、QEMU 进程持续高负载；UTM 强制断电后重新开机，61 秒后网页可访问。关机日志不持久（重启后 `journalctl -b -1` 为空），原因无从查起。应用的停止脚本在关机开始 6 秒内被调用，Cindy 的停止流程最长约 31 秒，可以排除 |
+| 强制断电后开机 | 应用自动启动，登录状态、凭据、已保存的供应商都保留 |
+
 ## Cindy Host 实测（P0）
 
 在 VM 上以普通用户身份，从系统盘手动启动上游 `cc2dc0f` 的 Host 构建产物（只打包 Pi + ripgrep）：
@@ -133,6 +144,5 @@
 - `pickUserFile` / `authorizeUserFile`
 - 主题/语言事件 `$on('os/theme' | 'os/language')`
 - 更长时间（10 分钟以上）的 SSE 空闲
-- 应用升级：对已安装的应用再执行 `fnos-cli app install-fpk`（版本更高）会失败，错误码 `10236`，系统日志为「应用 Cindy 安装失败。原因：应用已存在。」；`app update` 只能从应用中心来源下载。通过应用中心「手动安装 → 从电脑上传」升级尚未测通（自动化上传后没有任何反应和日志，可能上传本身没有发生），需要人工在界面上试一次（2026-11-15）
 - 卸载：`fnos-cli app uninstall` 后 `TRIM_PKGVAR`、`TRIM_PKGETC` 中的数据和凭据密钥**保留**，重新安装后沿用（2026-11-15）；`@apphome`、`@appshare`、`@appmeta` 下的应用目录也会留下。干净重装要用 sudo 删除这五个目录。界面卸载及 `uninstall_init` 向导的行为尚未测试
 - x86 真机上的差异

@@ -114,12 +114,17 @@ scripts/build-host.sh arm64     # 开发 VM 用；真机用 amd64
 ```bash
 scripts/upstream-check.sh <分支或 commit> pnpm --filter @cindy/host test     # 已有构建机时加 CINDY_BUILD_MACHINE=<名字>
 scripts/upstream-check.sh <分支或 commit> bash -c 'cd apps/host && node --import tsx --import ./src/loaders/register-raw.mjs --test src/auth/login.test.mjs'
+scripts/upstream-check.sh <分支或 commit> --script checks.sh                    # 本地脚本，在构建机的仓库根目录执行
 ```
+
+多条命令（各自带 `cd`、管道、引号）写成一个本地脚本，用 `--script` 传过去，不需要再为远程执行转义。
 
 - 只测已提交的内容：先在 `.upstream/cindy` 提交（或 amend），工作区有未提交改动时脚本会提示。
 - commit 以 git 对象的形式传到构建机：构建机上的 `~/cindy-dev`（`~/cindy` 的 worktree，首次运行时自动创建，远端 `mac` 指向 Mac 上的 `.upstream/cindy`）拉取该 commit，确认 HEAD 等于这个 SHA 且没有改动后才运行命令。不要用补丁文件经共享目录传改动：构建机可能读到不完整的文件，而 `git apply` 失败后命令照样会在未打补丁的树上运行。
 - `~/cindy-dev` 与 `build-host.sh` 使用的 `~/cindy` 分开，构建时的强制重置不会影响测试。锁文件变化时才重新安装。构建机的文件系统是 btrfs，pnpm 用写时复制克隆导入依赖，两份 `node_modules` 与 pnpm 仓库共用数据，`du` 会重复计算；估算占用看 `df`。
 - 每一步（fetch、lfs、install、run）都打印耗时。Host 的类型检查要加大内存，否则会退出（134）：`scripts/upstream-check.sh <ref> env NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @cindy/host run typecheck`。
+- 构建机上只有一份 `~/cindy-dev`，同时只能跑一个检查；多个分支要排队。
+- 确认变基没有改变提交内容时，比较变基前后的 `git show <commit> | git patch-id --stable`。`.upstream/cindy` 是 `blob:none` 部分克隆，`git range-diff` 要逐个下载对象，很慢。
 
 ### 打包 fpk 并装进 VM
 
@@ -135,7 +140,26 @@ F app install-fpk build/fpk/cindy-<版本>-arm64.fpk --volume-id 2 \
 ```
 
 - `--custom-parameters` 代替安装向导里的版本选择（`cn` 或 `global`）。
+- `CINDY_FNOS_ADAPTER_LOGIN=0 scripts/build-fpk.sh …` 打一个不带 Adapter 登录页的测试包：未登录的用户会直接看到 Cindy 原版登录页，用于验证 Host 的网页登录（`patches/0005`）。
+- 升级已安装的应用只能在应用中心「手动安装 → 从电脑上传」，由人在界面上操作（`install-fpk` 不能覆盖安装，见平台笔记）。
 - 已安装时 `install-fpk` 会报 10236「应用已存在」，要先 `F app uninstall cindy --yes`。卸载后数据目录仍会保留，干净重装还要用 sudo 删除 `@appdata`、`@appconf`、`@apphome`、`@appshare`、`@appmeta` 下的 `cindy`（见平台笔记），然后执行 `sudo fstrim -av`。
+
+### 在 VM 上直接查询 Host
+
+界面出问题时，先绕过浏览器、网关和 Adapter，在 VM 上直接问 Host，判断问题在 Host 还是在网页端。Host 的地址和 Adapter 用的 token 都在应用数据目录（`TRIM_PKGVAR`，例如 `/vol2/@appdata/cindy`）的 `profile/` 下：
+
+```bash
+# 在 VM 上以 root 运行
+D=/vol2/@appdata/cindy/profile
+T=$(cat $D/host-api-token)
+U=$(python3 -c "import json;print(json.load(open('$D/host-endpoint.json'))['baseUrl'])")
+curl -s $U/health                                                     # 不需要 token
+curl -s -X POST -H "authorization: Bearer $T" -H 'content-type: application/json' -d '{}' $U/api/auth/state
+curl -s -X POST -H "authorization: Bearer $T" -H 'content-type: application/json' -d '{}' $U/api/providers
+curl -s -X POST -H "authorization: Bearer $T" -H 'content-type: application/json' -d '{"agentKind":"pi"}' $U/api/capabilities
+```
+
+Adapter 为每个请求记一行日志（`logs/adapter.log`，含路径、状态码和耗时），统计状态码能很快找出页面里失败的请求。
 
 ### 磁盘空间
 

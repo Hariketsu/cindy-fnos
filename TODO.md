@@ -16,7 +16,7 @@
 
 1. [x] **集成构建并装进 VM**（2026-11-15）：fpk 装进 volume 2，飞牛桌面两个入口都打开原版界面（未登录状态），请求全部留在前缀内，见 [证据](docs/evidence/2026-11-15-p1-integration-install.md)
 2. [x] **网页首次登录**（2026-11-15）：安装向导选择版本（中国大陆版：微信；国际版：Google、Apple）；Adapter 的 `/_fnos/login`（原版风格）运行 `cmd/main host-login <方式>`（停 Host → `cindy-host login --no-open` → 重启 Host），`/connect` 也转到登录页。国际版 Apple 登录成功进入主界面，见 [证据](docs/evidence/2026-11-15-p1-integration-install.md)；中国大陆版微信登录受上游限制失败（见「上游事项」）
-3. [ ] **P1 验收**：2026-11-17 用 `upstream.lock`=`fe0daea` + 补丁 `0003`～`0007` 的 fpk 0.1.4（测试包去掉了 Adapter 登录，改用原版登录页）在开发 VM 上验收：网页 Apple 登录与登出后再登录、GLM 5.3 Flash 流式回复、权限确认、停止、DeepSeek 自带 Key、强制断电重启后自启并保持登录与凭据，均通过（证据待写入 `docs/evidence/`）。待做：应用中心手动升级、卸载；`fnos-cli power reboot` 后 VM 黑屏 6 分钟以上未起来、强制断电后正常，原因未查明（Cindy 停止流程有 31 秒上限，基本排除），卸载前再复现一次
+3. [ ] **P1 验收**：2026-11-17 用 `upstream.lock`=`fe0daea` + 补丁 `0003`～`0007` 的 fpk 0.1.4（测试包去掉了 Adapter 登录，改用原版登录页）在开发 VM 上验收：网页 Apple 登录与登出后再登录、GLM 5.3 Flash 流式回复、权限确认、停止、DeepSeek 自带 Key、强制断电重启后自启并保持登录与凭据，均通过（证据待写入 `docs/evidence/`）。应用中心「手动安装 → 从电脑上传」从 0.1.4 升级到 0.1.5 通过，数据、凭据密钥、登录和供应商都保留。待做：卸载；`fnos-cli power reboot` 后 VM 黑屏 6 分钟以上未起来、强制断电后正常，原因未查明（Cindy 停止流程有 31 秒上限，基本排除），卸载前再复现一次
 4. [ ] **自带 API Key 的供应商（DeepSeek）**：网页端「添加供应商」能列出 DeepSeek 预设，但保存调用的 `maker.createCustomProvider` 在 Host 与 shim 中都未实现，暂时只能用 Cindy 账号内置的模型（含 Cindy AI 提供的 DeepSeek V4）。已提功能建议 [#10644](https://github.com/makecindy/cindy/issues/10644)，分诊已认可方向并欢迎提 PR；选定 C 路线：先在 issue 下问维护者写通道走契约通道还是通用 IPC 通道，已发评论（2026-11-15，[链接](https://github.com/makecindy/cindy/issues/10644#issuecomment-6896283058)），等维护者答复
 
 Adapter 集成时要验证 / 加固（子代理 A 提出）：
@@ -30,7 +30,6 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 - [ ] Host 登录遇到「需绑定手机号／选择账号」时失败（`no refresh token`）：登录页已提示用户先在 Cindy 桌面版用同一方式登录并完成设置。上游 [#10704](https://github.com/makecindy/cindy/pull/10704) 已让 CLI 报错说明缺哪一步（待 `upstream.lock` 前移）；在网页上完成绑定要靠 [#10600](https://github.com/makecindy/cindy/issues/10600)
 - [ ] Adapter 的登录页（包装 `cindy-host login` CLI）与 #11048 的原版网页登录取舍：#11048 合入后，正式包是否去掉 `CINDY_FNOS_MAIN`、直接用原版登录页
 - [ ] 只打包 Pi 时，账号默认模型（如 `claude-sonnet-4-6`）不属于已打包的 Agent，新输入框显示「模型信息暂不可用」，需手动换模型；页面还会请求未打包 Agent 的 `/api/capabilities`（404）。属于 #10640 同类问题，待决定是否提上游 issue
-- [ ] 升级路径：`fnos-cli app install-fpk` 对已安装应用报 10236「应用已存在」；应用中心「手动安装」升级需要人工在界面上试一次（见平台笔记）
 - [ ] 非管理员账号能否读取应用目录里的 600 文件（管理员可以，见平台笔记 `trimacl`）
 
 
