@@ -2,7 +2,12 @@
 # Run a command against a commit of .upstream/cindy on the Linux build machine.
 #
 # Usage: scripts/upstream-check.sh <ref> <command...>
+#        scripts/upstream-check.sh <ref> --script <file>
 #   e.g. scripts/upstream-check.sh fix/host-login-outcomes pnpm --filter @cindy/host test
+#
+# --script runs a local bash script from the repository root on the build
+# machine, so several commands (with their own quoting, cd and pipes) need no
+# escaping. It is passed base64-encoded and decoded there.
 #
 # The build machine has the dependencies; the Mac clone has the branches. The
 # commit moves between them as git objects: ~/cindy-dev on the build machine
@@ -19,7 +24,7 @@ UPSTREAM=$ROOT/.upstream/cindy
 MACHINE=${CINDY_BUILD_MACHINE:-cindy-build-arm64}
 
 if (( $# < 2 )); then
-  echo "usage: scripts/upstream-check.sh <ref> <command...>" >&2
+  echo "usage: scripts/upstream-check.sh <ref> <command...> | <ref> --script <file>" >&2
   exit 2
 fi
 REF=$1; shift
@@ -27,7 +32,14 @@ SHA=$(git -C "$UPSTREAM" rev-parse --verify "$REF^{commit}")
 if [[ -n $(git -C "$UPSTREAM" status --porcelain --untracked-files=no) ]]; then
   echo "[upstream-check] note: .upstream/cindy has uncommitted changes; they are not part of $REF" >&2
 fi
-CMD=$(printf '%q ' "$@")
+if [[ $1 == --script ]]; then
+  [[ -f ${2:-} ]] || { echo "upstream-check: no such script: ${2:-}" >&2; exit 2; }
+  CMD="bash -c \"\$(echo $(base64 < "$2" | tr -d '\n') | base64 -d)\""
+  LABEL="script $2"
+else
+  CMD=$(printf '%q ' "$@")
+  LABEL=$CMD
+fi
 
 orb -m "$MACHINE" bash -lc "set -euo pipefail
 export PATH=\$HOME/.local/node/bin:\$PATH
@@ -61,6 +73,6 @@ if [[ \$(cat node_modules/.upstream-check-lock 2>/dev/null) != \$LOCK ]]; then
   echo \$LOCK > node_modules/.upstream-check-lock
 fi
 
-echo \"[upstream-check] running at $SHA ($REF): $CMD\" >&2
+echo \"[upstream-check] running at $SHA ($REF): $LABEL\" >&2
 step run $CMD
 "

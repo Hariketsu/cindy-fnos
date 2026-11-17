@@ -28,3 +28,6 @@ AGENTS.local.md
 
 # Session handoffs: local environment details and maintainer preferences
 handoff/
+
+# Scratch files such as screenshots waiting to be sorted into docs/
+.tmp/
