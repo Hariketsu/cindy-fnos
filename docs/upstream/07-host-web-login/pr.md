@@ -34,37 +34,45 @@ fnOS VM 实测发现：网页登录成功后已进入主界面，但模型选择
 
 ### 自动验证
 
-Linux 构建机使用 main 锁文件安装依赖，最终修复源码 `8e6f933d93` 的验证全部通过。最终合并提交 `e6920ae90438e076641028968572c52426df0918` 与该源码 tree 均为 `414fa92744e956d774af3c7640aea8733ba18466`，`git diff 8e6f933d93 HEAD` 为空，未修改已验证内容；本轮未单独报告耗时。
+最终修复源码 `efd7535df6` 已在 Linux 构建机验证通过；最终单提交为 `a18aac9ec89e89a7b52fe1e3f781e8f1a3f04af4`；`git diff efd7535df6 HEAD` 为空，两者 tree 均为 `ee737a3c15c2963706de32b1b874e56d125d496e`。以下为本轮实际命令与结果。
 
 ```text
-cd apps/host && node --import tsx --import ./src/loaders/register-raw.mjs --test src/auth/login.test.mjs
-结果：12/12，通过
+pnpm --filter desktop exec vitest related --run ../host/src/auth/login.mjs ../host/src/auth/web-login.ts ../host/src/main.ts ../host/src/server.mjs ../host/src/service.mjs ../web/shim.js ../../docs/dev-rules/protocol-compatibility/host-web-adapter-experimental.md ../../docs/host/basic-web.md ../../packages/maker-shared/src/hostChannelContract.ts
+结果：1 文件，22/22，通过，69s
 
-cd apps/host && node --import tsx --import ./src/loaders/register-raw.mjs --test src/server.test.mjs
-结果：27/27，通过
+pnpm --filter desktop exec vitest run src/main/maker-host/__tests__/hostDesktopSourceContracts.guard.test.ts
+结果：31/31，通过，2s
 
-cd apps/host && node --import tsx --import ./src/loaders/register-raw.mjs --test src/web-shim.test.mjs
-结果：26/26，通过
+pnpm --filter desktop exec vitest run src/main/maker-host
+结果：247 文件通过、8 跳过；4873 通过、80 跳过，89s
 
 pnpm --filter @cindy/host test
-结果：537/537，通过
+结果：537/537，通过，39s
 
 NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @cindy/host typecheck
+结果：PASS，42s
+
+maker-shared 契约测试
+结果：2521/2521，通过
+
+pnpm check:test-hygiene
 结果：PASS
 
 pnpm check:dev-docs
 结果：PASS
-
-pnpm check:test-hygiene
-结果：PASS
 ```
 
-单文件此前秒级计时：`auth/login.test.mjs` 1s、`server.test.mjs` 不足 1s、`web-shim.test.mjs` 在代次修复前不足 1s；26 项版本本轮未单独报告耗时。共享合同未再变更：`947fb154f5` 已由协调器补跑 maker-shared 契约测试，118 个文件、2521/2521 通过（4s）；maker-shared typecheck PASS。
+Host 定向文件此前已通过：`auth/login.test.mjs` 12/12、`server.test.mjs` 27/27、`web-shim.test.mjs` 26/26。早期单文件秒级计时分别为 1s、不足 1s、代次修复前不足 1s；26 项版本未单独报告耗时，最终完整 Host 537/537 用时 39s。
+
+Desktop related 命令覆盖本 PR 全部 9 个非测试文件。`hostDesktopSourceContracts.guard.test.ts` 通过文件读取检查源码文本，不建立可供 Vitest related 收集的生产模块导入关系，因此必须单独运行；本轮还运行了整个 Desktop `src/main/maker-host` 目录，覆盖 CI verify-checks 对应部分。跳过项按测试套件实际结果记录，未为本 PR 新增跳过。
+
+Host 定向文件此前在 `8e6f933d93` 已通过：`auth/login.test.mjs` 12/12、`server.test.mjs` 27/27、`web-shim.test.mjs` 26/26；本轮 Host 全量包含这些用例。此前秒级计时：`auth/login.test.mjs` 1s、`server.test.mjs` 不足 1s、`web-shim.test.mjs` 在代次修复前不足 1s；26 项版本未单独报告耗时。maker-shared typecheck 在 `947fb154f5` 已通过，此后未改共享包源码。
 
 本机已做 JS 语法检查与 `git diff --check`；工作树无 node_modules，按任务要求不安装依赖、不运行构建或全套测试。
 
-测试价值（均通过生产入口，unit；已取得的单文件耗时及本轮未计时说明见上）：
+测试价值（行为测试通过生产入口，unit；跨文件出口契约沿用已有 guard；已取得的单文件耗时及本轮未计时说明见上）：
 
+- `hostDesktopSourceContracts.guard.test.ts`（guard）：首次网页登录尚无会话，不能复用按已存会话及设备身份构造的 client，因此 main.ts 预期构造计数由 2 调整为 3；新 client 满足全部 `hostAuthFetch` 断言及禁止 `globalThis.fetch` 的检查，没有放宽出口代理契约。
 - `auth/login.test.mjs`：原 CLI 测试未覆盖网页状态机。最小输入为一个 Google 授权、两账号兑换结果、迟到回调及一个 SSO 追加验证；验证显示状态、令牌不出 Host、controller 争用、取消后的零凭证提交、SSO 真实动作及无认证上下文拒绝。
 - `server.test.mjs`：真实 HTTP 入口验证无 owner 时可调用认证接口、caller 不信请求体、退出不清 Cookie；一个未就绪订阅分别接收历史与实时 owner 事件，必须过滤，只保留账号事件；就绪后正常事件与确认通道恢复，失效后重新过滤。同步调整原先要求账号退出撤销配对的断言。
 - `web-shim.test.mjs`：执行实际打包 shim，最小动作是读取登录态、发起 SSO discovery、退出；验证真实路径／参数、弹窗拦截、唯一 SSO 异步自动启动复用预留标签页、账号过期事件投影及无 `/connect` 跳转；VM 代次回归覆盖未登录同步缓存 → `auth_changed` 代次 3 登录 → 同账号代次 4 → 退出，并覆盖启动代次及真实 SSE 重连后读取；真实 server + shim + protocol=2 经解码器验证隐藏事件间隙不会破坏游标，200 条隐藏事件不导致重连，只在可见性边界或隐藏后出现账号事件时重连。
