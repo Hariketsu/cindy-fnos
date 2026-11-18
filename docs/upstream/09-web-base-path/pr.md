@@ -53,7 +53,7 @@
 
 ```text
 cd apps/host && node --import tsx --import ./src/loaders/register-raw.mjs --test src/web-shim.test.mjs
-结果：20/20 通过，命令墙钟 0s（协调端秒级计时，不足一秒）
+结果：20/20 通过，命令墙钟 0s（秒级计时，不足一秒）
 pnpm --filter @cindy/host test
 结果：520/520 通过，37s
 NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @cindy/host typecheck
@@ -64,7 +64,7 @@ pnpm check:dev-docs
 结果：11/11 通过，1s
 ```
 
-以上历史检查由协调端在 Linux 构建机串行执行。
+以上历史检查在 Linux（Debian 12 arm64）上执行。
 
 测试价值（`web-shim.test.mjs`，补充到现有文件）
 - 生产入口与可观察结果：浏览器 shim 公开的 `window.electronAPI`（`auth.getState`、`maker.send`、`authLogout`）和它自动建立的事件流；可观察结果是发出的请求地址和退出后的跳转地址。
@@ -74,11 +74,11 @@ pnpm check:dev-docs
   - 前缀 `'/cindy/'`：一次 RPC、一次 `maker.send`、事件流和一次退出，地址必须是 `/cindy/api/auth/state`、`/cindy/chat`、`/cindy/events?…`、`/cindy/api/auth/logout`，跳转到 `/cindy/connect`（修改前全部是根路径）；
   - 不合法的值（`https://evil.example`、`//evil.example`、`/\evil.example`、非字符串）：表驱动，请求和跳转必须保持根路径（直接使用该值的实现会跳到外站）。
 - tier：unit，复用文件内已构建的 shim，无 I/O 和 socket。
-- 实测耗时：协调端报告变基后单独运行该文件 0s（秒级计时，不足一秒）。
+- 实测耗时：变基后单独运行该文件 0s（秒级计时，不足一秒）。
 
 ### 手工验证
 
-协调端已在 fnOS VM 实测 fpk `0.1.4`：Host 使用 `CINDY_WEB_BASE=/app/cindy/` 构建，补丁集等于集成分支 `900a2e5f70`，其中本 PR 的子路径部分等于 `25d5629441`。
+已在 fnOS VM 实测 fpk `0.1.4`：Host 使用 `CINDY_WEB_BASE=/app/cindy/` 构建，Cindy 代码为当时的 `main` 加上本 PR 与 #11048、#11049、#11050，其中本 PR 的子路径部分等于变基前的 `25d5629441`。
 
 Cindy 通过飞牛应用网关挂在 `/app/cindy/` 下；Adapter（本项目的反向代理）去掉前缀后转发，并设置 `window.__CINDY_BASE__`。Adapter 日志确认页面的 `/api/*`、`/events`、`/chat` 及静态资源请求全部经由该前缀到达。登录、模型选择、发送消息、流式回复、权限确认、停止、登出均正常。登出后不再跳转是 #10600 决定的组合行为，见 #10600；本 PR 单独的退出跳转行为仍由上述单元测试覆盖。
 

@@ -40,7 +40,7 @@ Host 创建成功后通过现有 SSE 广播供应商变更，Web shim 将该事�
 
 ### 自动验证
 
-本次审阅修复的 HEAD 为 `df6af3d85a`，基于 `f9f9d4df90`。本机已通过 JavaScript 语法检查、`git diff --check` 和两笔提交的 DCO 检查。Linux 在修复前的 `8426333da0` 上载入回归用例后复现失败，订阅回调未执行。修复后的定向检查由协调器在 Linux 构建机串行执行。
+本次审阅修复的 HEAD 为 `0fa621005b`（`7e9ad7e3dc` + `0fa621005b`），基于 `f9f9d4df90`。本机已通过 JavaScript 语法检查、`git diff --check` 和两笔提交的 DCO 检查。把回归用例放到修复前的代码上运行，Linux 上复现失败，订阅回调一次也没有执行。修复后的定向检查在 Linux（Debian 12 arm64）上执行。
 
 | Linux 检查 | 结果 |
 | --- | --- |
@@ -50,7 +50,7 @@ Host 创建成功后通过现有 SSE 广播供应商变更，Web shim 将该事�
 | `NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @cindy/host typecheck` | 通过 |
 | `pnpm check:dev-docs` | 15/15 通过 |
 
-以下为变基前 `10d381c30e` 在 Linux 构建机的历史验证，供确认原功能覆盖。
+以下为变基前 `10d381c30e` 在 Linux 上的历史验证，供确认原功能覆盖。
 
 ```text
 # 从 apps/host 执行
@@ -89,7 +89,7 @@ pnpm check:dev-docs
 
 ### 手工验证
 
-协调器已在 fnOS linux-arm64 VM 验收通过：安装包 fpk `0.1.4` 的补丁集等于集成分支 `900a2e5f70`，其中 #10644 部分等于本 PR 的 `120186e4ba` + `10d381c30e`。使用国际版账号经网页登录，Host 仅打包 Pi。
+已在 fnOS linux-arm64 VM 验收通过：安装包 fpk `0.1.4` 的 Cindy 代码为当时的 `main` 加上本 PR 与 #11047、#11048、#11049，其中本 PR 部分等于变基前的 `120186e4ba` + `10d381c30e`。使用国际版账号经网页登录，Host 仅打包 Pi。
 
 1. 网页端「设置 → 模型供应商 → 添加供应商」选择 DeepSeek 预设，填写真实 API Key，成功拉取 4 个模型。
 2. 保存后供应商显示「已配置」，列出 Claude Code / Codex / Pi 三个 runtime；此次实际执行仅验证 Pi。

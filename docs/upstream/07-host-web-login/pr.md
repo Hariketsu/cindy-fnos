@@ -36,9 +36,9 @@ fnOS VM 实测发现：网页登录成功后已进入主界面，但模型选择
 
 ### 自动验证
 
-第二轮修复前回归提交为 `876fa8ac83`。Linux 构建机已确认旧 shim 提前发布登录状态，旧登录处理器在授权失败后阻止第二个浏览器获取授权地址。
+把第二轮的回归用例放到修复前的代码上运行，Linux 上已确认旧 shim 提前发布登录状态，旧登录处理器在授权失败后阻止第二个浏览器获取授权地址。
 
-Linux 构建机已通过修复后提交 `28a65528d7` 的定向验证，以下为结果及墙钟耗时。
+修复后提交 `28a65528d7` 已在 Linux（Debian 12 arm64）上通过定向验证，以下为结果及墙钟耗时。
 
 ```text
 cd apps/host
@@ -62,7 +62,7 @@ NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @cindy/host typecheck
 结果：通过，1m09s
 ```
 
-上一轮在 `a18aac9ec8` 对应的源码树验证通过 Host 537 项、Desktop maker-host 4873 项（80 跳过）、maker-shared 2521 项契约测试、Host 类型检查、测试卫生检查及开发文档检查。本轮本机通过 JS 语法检查及 `git diff --check`。fork 完整 CI 正在运行，结果待填。
+上一轮在 `a18aac9ec8` 对应的源码树验证通过 Host 537 项、Desktop maker-host 4873 项（80 跳过）、maker-shared 2521 项契约测试、Host 类型检查、测试卫生检查及开发文档检查。本轮本机通过 JS 语法检查及 `git diff --check`。推送前在提交者 fork 上对 `28a65528d7` 手动运行了本仓 `client-ci`：除 `Windows unit tests (4/8)` 外全部通过，包括 macOS、Ubuntu、Windows 上的 Host regressions；该分片唯一的失败是 `windowsPackagedInstanceBarrier.test.ts` 探测 Windows 打包实例超时（`timed out probing Windows packaged-instance`），本 PR 没有改动相关代码，同一基线上的其他两次运行中该用例通过，已重跑该分片，最终结果以本 PR 的 CI 为准。
 
 测试价值（行为测试通过生产入口，unit；跨文件出口契约沿用已有 guard；已取得的单文件耗时及本轮未计时说明见上）：
 
@@ -73,7 +73,7 @@ NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @cindy/host typecheck
 
 ### 手工验证
 
-上一轮实测环境：fnOS 1.x arm64 VM，国际版 Apple 账号；fpk 0.1.4，补丁集对应集成分支 `900a2e5f70`（包含本 PR 的 `908a53606a` 和 `8e6f933d93` 修复）。Cindy 窗口运行在飞牛 iframe 内。下列截图的窗口标题栏和外框属于 fnOS 桌面，窗口内容为 Cindy 原版界面，本项目没有添加任何页面元素。
+上一轮实测环境：fnOS 1.x arm64 VM，国际版 Apple 账号；fpk 0.1.4，Cindy 代码为当时的 `main` 加上本 PR（含代次修复）与 #11047、#11049、#11050。Cindy 窗口运行在飞牛 iframe 内。下列截图的窗口标题栏和外框属于 fnOS 桌面，窗口内容为 Cindy 原版界面，本项目没有添加任何页面元素。
 
 1. 原版登录页显示 Apple、Google、SSO 入口。
 
