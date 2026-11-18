@@ -34,9 +34,10 @@ REPO=$(git -C "$UPSTREAM" remote get-url "$REMOTE" | sed -E 's#^(https://github.
 LOGDIR=$ROOT/build/fork-ci
 log() { echo "[fork-ci] $*" >&2; }
 
-git -C "$UPSTREAM" fetch -q origin main
-if ! git -C "$UPSTREAM" merge-base --is-ancestor origin/main "$SHA"; then
-  log "warning: $REF is not based on upstream main; test hygiene and diff-based checks may fail spuriously"
+# Test hygiene trusts the fork's main, so that is the base the commit must sit on.
+git -C "$UPSTREAM" fetch -q "$REMOTE" main
+if ! git -C "$UPSTREAM" merge-base --is-ancestor "$REMOTE/main" "$SHA"; then
+  log "warning: $REF is not based on $REPO main; test hygiene and diff-based checks may fail spuriously"
 fi
 
 log "pushing $SHA ($REF) to $REPO $BRANCH"
@@ -57,10 +58,11 @@ done
 log "run https://github.com/$REPO/actions/runs/$RUN"
 
 START=$(date +%s)
-gh run watch "$RUN" -R "$REPO" --interval 60 >/dev/null 2>&1 || true
+# gh run watch can return before the run ends, so poll the run status instead.
+until [[ $(gh run view "$RUN" -R "$REPO" --json status -q .status 2>/dev/null) == completed ]]; do sleep 60; done
 log "finished in $(( ($(date +%s) - START) / 60 )) min"
 
-JOBS=$(gh run view "$RUN" -R "$REPO" --json jobs -q '.jobs[] | "\(.conclusion // .status)\t\(.name)"' | sort)
+JOBS=$(gh run view "$RUN" -R "$REPO" --json jobs -q '.jobs[] | "\(if (.conclusion // "") == "" then .status else .conclusion end)\t\(.name)"' | sort)
 echo "$JOBS"
 # "verify" only aggregates the other jobs. Fork runs may never get a macOS
 # runner, so a cancelled job is reported but does not fail the check.
