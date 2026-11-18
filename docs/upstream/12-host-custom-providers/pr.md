@@ -8,6 +8,8 @@
 
 提交顺序为行为不变的 Desktop 依赖拆分在前、Host 功能在后。共享 handler 通过端口调用平台能力，Desktop 在 `providerHandlers.desktop.ts` 绑定原函数，Host 注入现有 availability policy。模型发现的桌面 OAuth 读取与默认 transport 移到 `provider-model-fetch.desktop.ts`，纯 URL 推导与请求构造继续共用。
 
+Host 创建成功后通过现有 SSE 广播供应商变更，Web shim 将该事件转发给 `maker.onProvidersChanged`，其他已打开的标签页随即按现有逻辑刷新目录。
+
 ### 变更类型
 
 - [x] `feat` 新功能
@@ -21,7 +23,7 @@
 - 关联 Issue / 需求：Refs https://github.com/makecindy/cindy/issues/10644 （本 PR 为第一阶段；更新、删除、断开后续跟进）
 - 本 PR 包含：`maker:provider:custom:create`、`maker:provider:models-fetch` 的共享契约、Host 鉴权路由、Desktop handler 注册与 Host 依赖装配、回归测试及兼容说明；必要的 Desktop 平台装配拆分；共用严格凭据快照读取；现有 Host 构建守卫增加拒绝 `original-fs`。
 - 明确不包含：更新、删除、断开；通用 IPC 写协议；CLI 导入；renderer 改动；shim 的通用读取兜底调整。
-- 用户可见变化：已配对的网页端可通过原有向导创建自定义供应商并拉取模型。
+- 用户可见变化：已配对的网页端可通过原有向导创建自定义供应商并拉取模型；其他已连接的标签页会收到供应商变更通知。
 - 是否存在 breaking change：无。增量通道，既有数据与接口不变。
 
 ### UI 变化
@@ -38,7 +40,17 @@
 
 ### 自动验证
 
-最终 HEAD `10d381c30e` 的以下验证由协调器在 Linux 构建机执行，全部通过。本机仅执行语法及 diff 检查。
+本次审阅修复的 HEAD 为 `df6af3d85a`，基于 `f9f9d4df90`。本机已通过 JavaScript 语法检查、`git diff --check` 和两笔提交的 DCO 检查。Linux 在修复前的 `8426333da0` 上载入回归用例后复现失败，订阅回调未执行。修复后的定向检查由协调器在 Linux 构建机串行执行。
+
+| Linux 检查 | 结果 |
+| --- | --- |
+| `node --import tsx --import ./src/loaders/register-raw.mjs --test src/web-shim.test.mjs`（在 `apps/host`） | 20/20 通过，墙钟 0.440s |
+| 同一命令运行 `src/agent/provider-config.test.mjs` | 6/6 通过，墙钟 3.176s |
+| `pnpm --filter @cindy/maker-shared exec vitest run src/__tests__/hostChannelContract.test.ts` | 9/9 通过 |
+| `NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @cindy/host typecheck` | 通过 |
+| `pnpm check:dev-docs` | 15/15 通过 |
+
+以下为变基前 `10d381c30e` 在 Linux 构建机的历史验证，供确认原功能覆盖。
 
 ```text
 # 从 apps/host 执行
@@ -72,7 +84,7 @@ pnpm check:dev-docs
 测试价值（规则依据均为 #10644）：
 
 - `apps/host/src/agent/provider-config.test.mjs`：通过生产 `createHostService` 和 `createHostProviderConfig`，验证无 caller 的 403、真实 SQLite 配置与加密凭据、重复 ID、凭据失败回滚、发现输入校验、已存秘密端点绑定、旧 owner 拒绝及损坏密文的严格读取 / 显式替换（未传 Key 的创建沿用 Desktop 语义，不修改遗留密文）。现有 auth / provider-route 测试未覆盖 Host 创建入口。最小输入分别为无 caller、一个 Pi 配置、非法 URL、头写入失败与换账号；integration tier，内存 SQLite 和临时凭据，无外网/CLI。未单独计时；与 `web-shim.test.mjs` 合跑实测 2s。
-- `apps/host/src/web-shim.test.mjs`：调用构建后的浏览器 shim 公共方法，验证向导参数及结果穿过真实共享契约，并保留三个未接通写方法的不支持错误。现有测试不调用这两个供应商方法；最小输入为 create 的三个参数和一个 discovery input；unit tier。未单独计时；与 `provider-config.test.mjs` 合跑实测 2s。
+- `apps/host/src/web-shim.test.mjs`：调用构建后的浏览器 shim 公共方法，验证向导参数及结果穿过真实共享契约，并保留三个未接通写方法的不支持错误。原有测试不覆盖这两个供应商方法。#11050 的回归用例经浏览器 shim 的真实 SSE 解码入口注入一帧 `maker:provider:changed`，断言另一个标签页的公开订阅恰好收到一次回调；向导 RPC 测试不覆盖推送。最小输入为 create 的三个参数、一个 discovery input，以及独立的一帧无 payload 的变更通知；unit tier，修复后单文件墙钟 0.440s。
 - `packages/maker-shared/src/__tests__/hostChannelContract.test.ts`：调用导出的 client adapter，验证创建三参数、模型发现结构化失败结果的 wire 形状。现有契约缺少此二通道；最小输入为 create / fetch 各一次；unit tier。未单独计时；maker-shared 118 文件整包验证实测 4s。
 
 ### 手工验证
@@ -90,7 +102,7 @@ pnpm check:dev-docs
 
 ### 未执行的验证
 
-已完成上述 Linux 自动验证；未运行构建、完整仓库测试及三个修改测试文件的单独计时。macOS 与 Windows 实机未验证。
+修复后 Linux 定向检查见上表。推送前在提交者 fork 上手动运行了本仓 `client-ci`（与本 PR 两个提交合并后的 tree 相同，基于 `f9f9d4df90`）：26 项中 24 项通过，包括 8 个 Linux 单测分片、8 个 Windows 单测分片、Typecheck、verify-checks，以及 Ubuntu、Windows 上的 Host regressions；`Host regressions (macos-latest)` 在 fork 上排队 20 分钟未分到 macOS 机器而被取消，汇总项 `verify` 因此未通过，macOS 结果以本 PR 的 CI 为准。变基后的双标签页实机流程、回包字节和通知累计压力未实测；macOS 与 Windows 实机未验证。
 
 ## 风险
 
@@ -113,7 +125,7 @@ pnpm check:dev-docs
 - 回滚 / 降级方式：回退代码后网页两个入口恢复不可用；已写入的配置和加密凭据仍可由现有运行期读取，不删除用户数据。
 - 存量插件影响：无。
 
-与同时提交的 #10614（子路径）、#10600（网页登录）、#10601（隐藏跳过登录）对应 PR 在 `apps/web/shim.js` 及其测试附近会有文本冲突；无论先合入哪个，其余 PR 均由提交者跟进变基。
+与 #11047（子路径）和 #11048（网页登录）都涉及 `apps/web/shim.js`。彼此会有文本冲突；无论先合入哪一个，其余 PR 都由提交者变基跟进，并重新跑 Web shim 回归。
 
 ### 提交前检查
 
