@@ -61,7 +61,7 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 | 模型选择器崩溃（`modelGroups.get` 返回 null） | 已删除 | [#10641](https://github.com/makecindy/cindy/issues/10641) | [#10643](https://github.com/makecindy/cindy/pull/10643) | **已合入**（2026-11-15，`dcecfa5`） |
 | 网页端添加自带 Key 的供应商 | `0007` | [#10644](https://github.com/makecindy/cindy/issues/10644) | [#11050](https://github.com/makecindy/cindy/pull/11050) | 2026-11-17 已提交（`120186e` refactor + `10d381c` feat，只做 create 与 models-fetch）；VM 上 DeepSeek 添加、拉取模型、流式回复、重启后保持均通过。update／delete／disconnect 留待后续 PR |
 
-2026-11-19：#11047、#11048、#11050 已变基到 `f9f9d4df90`，greptile 的审查意见全部修复；#11048 另按 main 的 CLI 行为补了 Device Link 登记。fork CI 已通过（#11048 有一个不稳定的 Windows 分片在重跑）；回复草稿在各自的 `docs/upstream/<序号>/review-reply.md`，等用户审阅后推送。本地补丁仍是 `fe0daea` 上的旧代码，lock 是否前移到 `f9f9d4df90` 待定。
+2026-11-19：#11047、#11048、#11050 已变基到 `f9f9d4df90`，greptile 的审查意见全部修复；#11048 另按 main 的 CLI 行为补了 Device Link 登记。fork CI 已通过（#11048 有一个不稳定的 Windows 分片在重跑）；经用户同意已强制推送、更新正文，并回复和 Resolve 了 greptile 的讨论（草稿在各自的 `docs/upstream/<序号>/`）。本地补丁仍是 `fe0daea` 上的旧代码，lock 是否前移到 `f9f9d4df90` 待定。
 
 流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<序号>-<主题>/`（已合入或关闭的移到 `archive/`），经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的集成分支从 `upstream.lock` 的 commit 起按补丁编号依次合入 #10429（`0003`）、#11047（`0004`）、#11048（`0005`）、#11049（`0006`）、#11050（`0007`），逐段导出每个合并提交，必须与 PR 代码一致。几个 PR 都改了网页 shim，合并时的冲突解法写在集成分支的合并提交里；任何一个 PR 合入后，其余的变基并重新导出。
 
