@@ -125,6 +125,21 @@ scripts/upstream-check.sh <分支或 commit> --script checks.sh                 
 - 每一步（fetch、lfs、install、run）都打印耗时。Host 的类型检查要加大内存，否则会退出（134）：`scripts/upstream-check.sh <ref> env NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @cindy/host run typecheck`。
 - 构建机上只有一份 `~/cindy-dev`，同时只能跑一个检查；多个分支要排队。
 - 确认变基没有改变提交内容时，比较变基前后的 `git show <commit> | git patch-id --stable`。`.upstream/cindy` 是 `blob:none` 部分克隆，`git range-diff` 要逐个下载对象，很慢。
+- 构建机适合跑写代码时的快速检查：改动相关的单测、`pnpm --filter desktop exec vitest run src/main/maker-host`（Host 源码 guard）。完整的 desktop 类型检查、vitest `related`、`ui:check` 在构建机上要几十分钟，交给下面的 fork CI。
+
+### 在 fork 上跑上游 CI
+
+提交或更新上游 PR 之前，用 `scripts/fork-ci.sh` 在贡献者的 fork 上跑上游完整的 `ci.yml`（GitHub 托管机器，含 Linux／Windows 单测分片、类型检查、verify-checks、Host 回归），与上游合并必需的检查一致，不占用构建机，多个分支可以同时跑：
+
+```bash
+scripts/fork-ci.sh <分支或 commit> [名字]   # 推到 fork 的 ci/<名字>，手动触发 ci.yml，等待结果
+```
+
+- 一轮约 30 分钟（2026-11-18 实测 29 分钟），期间不占用本机和构建机。失败时，失败任务的日志存到 `build/fork-ci/<名字>-<sha>.log`。
+- fork 上的 `Host regressions (macos-latest)` 一直拿不到 macOS 机器，排队 20 分钟后被取消，汇总任务 `verify` 随之失败（2026-11-18 两轮都是如此）。脚本把被取消的任务列为警告，只按其他任务的结果判定；macOS 的 Host 回归以 PR 上的 CI 为准。
+- 一次性准备：fork 的 `main` 要包含 `ci.yml`，GitHub 才会登记 workflow（`gh repo sync <fork> --branch main`）。fork 上的定时 workflow（如 `README star history`）可以停用。
+- 与 PR 上的运行不同：手动触发没有 PR 基准，按差异判断的检查（design colors、settings search）以 `HEAD^` 为基准，test hygiene 以 fork 的 `main` 为可信基线（只许收紧）。所以先同步 fork 的 `main`，再把分支变基到上游最新 `main` 并压成单个提交；基于旧 `main` 的分支会因为上游已收紧的基线而误报失败。Host 回归总是运行。
+- 推送到 fork 属于对外操作，需要维护者同意（可以一次性授权 `ci/*` 分支）。
 
 ### 打包 fpk 并装进 VM
 
