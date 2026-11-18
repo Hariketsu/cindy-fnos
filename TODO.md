@@ -56,10 +56,12 @@ Adapter 集成时要验证 / 加固（子代理 A 提出）：
 | Web 首次登录（第一阶段） | `0005` | [#10600](https://github.com/makecindy/cindy/issues/10600) | [#11048](https://github.com/makecindy/cindy/pull/11048) | 2026-11-17 已提交（单提交 `e6920ae`）：社交／同区域 SSO、登出保留配对、登录后进程内装配运行时；VM 首轮发现网页 shim 写死账号代次 1 导致模型目录卡在 `owner-pending`，已修。验证码登录、绑定留第二阶段，issue 保持打开。合入后 Adapter 可不再包装 CLI 登录（见下方待决） |
 | Host 登录结果非 ok 时失败 | — | [#10599](https://github.com/makecindy/cindy/issues/10599) | [#10704](https://github.com/makecindy/cindy/pull/10704) | **已合入**（2026-11-16，`a3028c0`）；只改 Host，没有本地补丁。`upstream.lock` 前移过 `a3028c0` 后，CLI 报错才会说明缺哪一步；微信未绑定手机号的账号仍需先在桌面版完成绑定 |
 | Host 手机号／邮箱登录 | — | 并入 [#10600](https://github.com/makecindy/cindy/issues/10600) | — | cn 提供手机号、微信、Apple，global 提供邮箱、Apple、Google（`/api/auth/providers`）；`cindy-host login` 只支持社交登录，已在 #10600 中提出 |
-| Host 本地模式（无账号） | `0006` | [#10601](https://github.com/makecindy/cindy/issues/10601) | [#11049](https://github.com/makecindy/cindy/pull/11049) | 2026-11-17 已提交（`a61f3c8`）：只修死入口，网页端隐藏「跳过登录」；Host 本地模式本身仍未做 |
+| Host 本地模式（无账号） | `0006`（待删） | [#10601](https://github.com/makecindy/cindy/issues/10601) | [#11049](https://github.com/makecindy/cindy/pull/11049) | 隐藏「跳过登录」的 #11049 **已合入**（2026-11-17，`cf427d2`），`upstream.lock` 前移过它后删除 `0006`；Host 本地模式本身仍未做（issue 11-16 有人复现，标 `readyForFix`） |
 | 只打包部分 agent 时模型目录失败 | 已删除 | [#10640](https://github.com/makecindy/cindy/issues/10640) | [#10642](https://github.com/makecindy/cindy/pull/10642) | **已合入**（2026-11-15，`ae78647`）；`upstream.lock` 已移到 `ae78647`。PR 的手工验证未补，合入前未要求 |
 | 模型选择器崩溃（`modelGroups.get` 返回 null） | 已删除 | [#10641](https://github.com/makecindy/cindy/issues/10641) | [#10643](https://github.com/makecindy/cindy/pull/10643) | **已合入**（2026-11-15，`dcecfa5`） |
 | 网页端添加自带 Key 的供应商 | `0007` | [#10644](https://github.com/makecindy/cindy/issues/10644) | [#11050](https://github.com/makecindy/cindy/pull/11050) | 2026-11-17 已提交（`120186e` refactor + `10d381c` feat，只做 create 与 models-fetch）；VM 上 DeepSeek 添加、拉取模型、流式回复、重启后保持均通过。update／delete／disconnect 留待后续 PR |
+
+2026-11-19：#11047、#11048、#11050 已变基到 `f9f9d4df90`，greptile 的审查意见全部修复；#11048 另按 main 的 CLI 行为补了 Device Link 登记。fork CI 已通过（#11048 有一个不稳定的 Windows 分片在重跑）；回复草稿在各自的 `docs/upstream/<序号>/review-reply.md`，等用户审阅后推送。本地补丁仍是 `fe0daea` 上的旧代码，lock 是否前移到 `f9f9d4df90` 待定。
 
 流程：先写 issue，再提关联 issue 的 PR；草稿放在 `docs/upstream/<序号>-<主题>/`（已合入或关闭的移到 `archive/`），经用户审阅后才提交。PR 分支在本地 `.upstream/cindy`，从用户的 fork `Hariketsu/cindy` 提交；本地补丁由 `.upstream/cindy` 的集成分支从 `upstream.lock` 的 commit 起按补丁编号依次合入 #10429（`0003`）、#11047（`0004`）、#11048（`0005`）、#11049（`0006`）、#11050（`0007`），逐段导出每个合并提交，必须与 PR 代码一致。几个 PR 都改了网页 shim，合并时的冲突解法写在集成分支的合并提交里；任何一个 PR 合入后，其余的变基并重新导出。
 
