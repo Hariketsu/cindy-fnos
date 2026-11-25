@@ -1,8 +1,8 @@
 # PR 草稿：网页端支持部署在反向代理的子路径下
 
-> 状态：**草稿**，审阅修订的定向验证已通过，完整 CI 待确认。
+> 状态：**草稿**，已修复 MagicLizi 提出的 P1 控制字符绕过问题，Linux 全量 Host 单测、test-hygiene 与 dev-docs 均通过，待用户审阅后推送并回复。
 > 关联 issue：makecindy/cindy#10614（分诊机器人已建议推进并欢迎提交 PR）
-> 分支：`feat/web-base-path`，基于上游 `f9f9d4df90`，单个 DCO 提交 `c8f5e64ebf`。
+> 分支：`feat/web-base-path`，基于上游 `f9f9d4df90`，单个 DCO 提交 `ab84ad3b06`。
 > 模板：上游 `.github/PULL_REQUEST_TEMPLATE.md`
 
 ---
@@ -27,8 +27,8 @@
 
 - 关联 Issue / 需求：Closes https://github.com/makecindy/cindy/issues/10614
 - 本 PR 包含：
-  - `apps/web/shim.js`：读取并校验 `window.__CINDY_BASE__`（去掉末尾的 `/`；只接受以单个 `/` 开头、不含反斜杠的路径），加在 `requestHost`（覆盖所有 RPC）、`/chat`、`/events` 请求和 `authLogout` 的跳转地址前面；
-  - `apps/host/src/web-shim.test.mjs`：新增 2 个用例；测试辅助函数识别事件流请求的条件从 `startsWith('/events')` 改为 `includes('/events?')`，以便识别带前缀的地址；
+  - `apps/web/shim.js`：读取并校验 `window.__CINDY_BASE__`（去掉末尾的 `/`；只接受以单个 `/` 开头、不含反斜杠与 ASCII 控制字符的路径），加在 `requestHost`（覆盖所有 RPC）、`/chat`、`/events` 请求和 `authLogout` 的跳转地址前面；
+  - `apps/host/src/web-shim.test.mjs`：新增 2 个用例（包含 URL、`//host`、反斜杠、`\t`/`\n`/`\r` 控制字符与非字符串的表驱动矩阵）；测试辅助函数识别事件流请求的条件从 `startsWith('/events')` 改为 `includes('/events?')`，以便识别带前缀的地址；
   - `docs/host/README.md`：新增「部署在反向代理的子路径下」一节，说明构建（`vite build --base`）、代理（去掉前缀、负责身份校验、设置回环 `Host`，并在校验浏览器 `Origin` 后移除或改写它）和首页改写（设置 `__CINDY_BASE__`、改写 shim 地址）三件事。
 - 明确不包含：
   - Host 的路由和 `server.mjs` 注入首页的 `<script src="/shim.js">`：由代理改写，Host 不感知前缀；
@@ -47,24 +47,20 @@
 
 ### 自动验证
 
-审阅修订 `c8f5e64ebf` 在 Linux 通过 `pnpm check:dev-docs`。本机已通过 `git diff --check`、DCO 检查，并直接调用生产 `isLoopbackRequest` 核对四种请求头组合。外部 `Host` 或回环 `Host` 搭配浏览器外部 `Origin` 被拒绝，回环 `Host` 搭配匹配的回环 `Origin` 或无 `Origin` 通过此项检查。推送前在提交者 fork 上对 `c8f5e64ebf` 手动运行了本仓 `client-ci`：26 项中 24 项通过，包括 8 个 Linux 单测分片、8 个 Windows 单测分片、Typecheck、verify-checks，以及 Ubuntu、Windows 上的 Host regressions；`Host regressions (macos-latest)` 在 fork 上排队 20 分钟未分到 macOS 机器而被取消，汇总项 `verify` 因此未通过，macOS 结果以本 PR 的 CI 为准。
-
-以下是变基前 `25d5629441` 在 Linux 的历史验证。
+修订提交 `ab84ad3b06` 在 Linux（Debian 12 arm64）上执行以下验证（修复前先以新增的控制字符用例确认红测试在 `'/\t/evil.example'` 处失败，随后应用修复并重跑）：
 
 ```text
 cd apps/host && node --import tsx --import ./src/loaders/register-raw.mjs --test src/web-shim.test.mjs
-结果：20/20 通过，命令墙钟 0s（秒级计时，不足一秒）
+结果：21/21 通过，0.31s
 pnpm --filter @cindy/host test
-结果：520/520 通过，37s
-NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @cindy/host typecheck
-结果：PASS，44s
+结果：532/532 通过，40.3s
 pnpm check:test-hygiene
-结果：PASS，336 files，27s
+结果：PASS（334 files within baseline）
 pnpm check:dev-docs
-结果：11/11 通过，1s
+结果：15/15 通过，0.36s
 ```
 
-以上历史检查在 Linux（Debian 12 arm64）上执行。
+本机已通过 `git diff --check`、DCO 检查，并在此前直接调用生产 `isLoopbackRequest` 核对四种请求头组合（外部 `Host` 或回环 `Host` 搭配浏览器外部 `Origin` 被拒绝，回环 `Host` 搭配匹配的回环 `Origin` 或无 `Origin` 通过）。完整跨平台 CI 以本次推送后本 PR 的检查结果为准。
 
 测试价值（`web-shim.test.mjs`，补充到现有文件）
 - 生产入口与可观察结果：浏览器 shim 公开的 `window.electronAPI`（`auth.getState`、`maker.send`、`authLogout`）和它自动建立的事件流；可观察结果是发出的请求地址和退出后的跳转地址。
@@ -72,9 +68,9 @@ pnpm check:dev-docs
 - 现有覆盖缺口：现有用例都在根路径下运行（它们断言的 `/api/...` 地址守住了「未设置时行为不变」），没有用例设置前缀。
 - 最小失败输入：
   - 前缀 `'/cindy/'`：一次 RPC、一次 `maker.send`、事件流和一次退出，地址必须是 `/cindy/api/auth/state`、`/cindy/chat`、`/cindy/events?…`、`/cindy/api/auth/logout`，跳转到 `/cindy/connect`（修改前全部是根路径）；
-  - 不合法的值（`https://evil.example`、`//evil.example`、`/\evil.example`、非字符串）：表驱动，请求和跳转必须保持根路径（直接使用该值的实现会跳到外站）。
+  - 不合法的值（`https://evil.example`、`//evil.example`、`/\evil.example`、`/\t/evil.example`、`/\n/evil.example`、`/\r/evil.example`、非字符串）：表驱动，请求和跳转必须保持根路径（未过滤控制字符时 WHATWG URL 会剥离 `\t`/`\r`/`\n` 并解析到外站）。
 - tier：unit，复用文件内已构建的 shim，无 I/O 和 socket。
-- 实测耗时：变基后单独运行该文件 0s（秒级计时，不足一秒）。
+- 实测耗时：单独运行该文件 0.31s。
 
 ### 手工验证
 
