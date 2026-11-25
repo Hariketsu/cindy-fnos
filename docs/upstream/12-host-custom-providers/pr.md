@@ -40,10 +40,11 @@ Host 创建成功后通过现有 SSE 广播供应商变更，Web shim 将该事�
 
 ### 自动验证
 
-本次变基到 `23b2856f41` 后的 HEAD 为 `503f2c1278`（`e4ae885f7c` refactor + `503f2c1278` feat）。本机已通过 `git diff --check` 与两笔提交的 DCO 检查。变基后在 Linux（Debian 12 arm64）上执行以下验证：
+本次变基到 `23b2856f41` 后的 HEAD 为 `e50132dca4`（`e4ae885f7c` refactor + `e50132dca4` feat，含 `desktop-module-setters.ts` 与 `host-network-modules.ts` 两项源码契约登记）。本机已通过 `git diff --check` 与两笔提交的 DCO 检查。变基后在 Linux（Debian 12 arm64）上执行以下验证：
 
 | Linux 检查 | 结果 |
 | --- | --- |
+| `pnpm --filter desktop exec vitest run src/main/maker-host/__tests__/hostDesktopSourceContracts.guard.test.ts` | 54/54 通过，16.3s |
 | `pnpm --filter @cindy/host test` | 1151/1153 通过（2 跳过，0 失败），80.5s |
 | `NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @cindy/host typecheck` | PASS |
 | `pnpm --filter desktop exec vitest run src/main/maker-ipc/__tests__/providerHandlers.test.ts src/main/maker-host/__tests__/providerModelFetch.test.ts src/main/__tests__/hostDelegation.test.ts` | 3 文件、449/449 通过，21.8s |
