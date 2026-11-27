@@ -21,13 +21,13 @@ node_modules/
 __pycache__/
 
 # Private reference material (e.g. design discussions); never published
-ref/
+ref
 
 # Per-machine agent instructions (see AGENTS.local.example.md)
 AGENTS.local.md
 
 # Session handoffs: local environment details and maintainer preferences
-handoff/
+handoff
 
 # Scratch files such as screenshots waiting to be sorted into docs/
 .tmp/
