@@ -37,14 +37,14 @@ cindy_ensure_machine() {
       if ! docker container inspect "$machine" >/dev/null 2>&1; then
         echo "Creating Docker build container $machine (debian:bookworm, $platform)..."
         docker volume create "$vol" >/dev/null
-        docker run -d --name "$machine" --platform "$platform" \
+        docker run -d --init --name "$machine" --platform "$platform" \
           -v "$vol:/root" \
           -v "$root:$root" \
           debian:bookworm sleep infinity >/dev/null
         docker exec "$machine" bash -lc '
           set -euo pipefail
           apt-get update -qq
-          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git git-lfs curl ca-certificates xz-utils build-essential python3 >/dev/null
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git git-lfs curl ca-certificates xz-utils build-essential python3 procps >/dev/null
           git config --global --add safe.directory "*"
         '
       elif [[ $(docker inspect -f '{{.State.Running}}' "$machine") != true ]]; then

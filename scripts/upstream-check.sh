@@ -45,6 +45,8 @@ else
   LABEL=$CMD
 fi
 
+cindy_ensure_machine "$MACHINE" "$DEFAULT_ARCH" "$ROOT"
+
 cindy_run_in_machine "$MACHINE" "set -euo pipefail
 export PATH=\$HOME/.local/node/bin:\$PATH
 # pnpm 11 checks dependencies before every run/exec and would reinstall every
