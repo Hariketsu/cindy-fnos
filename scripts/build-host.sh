@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Build the Cindy Host release for fnOS inside an OrbStack Debian 12 machine.
+# Build the Cindy Host release for fnOS inside a Debian 12 machine (OrbStack on
+# macOS, Docker on Linux/WSL2).
 #
 # Usage: scripts/build-host.sh [arm64|amd64]    (default: arm64)
 # Output: build/host/cindy-host-linux-<arch>.tar.gz
 #
-# CINDY_WEB_BASE   URL path the browser loads the app from, e.g. /app/cindy/
-#                  (fnOS gateway). Builds the renderer with Vite --base so its
-#                  assets resolve under that path; the proxy in front must also
-#                  set window.__CINDY_BASE__ for the shim (patches/0004).
-#                  Default: unset, renderer served at / as upstream.
+# CINDY_WEB_BASE       URL path the browser loads the app from, e.g. /app/cindy/
+#                      (fnOS gateway). Builds the renderer with Vite --base so its
+#                      assets resolve under that path; the proxy in front must also
+#                      set window.__CINDY_BASE__ for the shim (patches/0004).
+#                      Default: unset, renderer served at / as upstream.
+# CINDY_BUILD_BACKEND  orb | docker (default: orb on macOS, docker on Linux)
 #
 # Why Debian 12: fnOS is Debian 12 (glibc 2.36). The release contains native
 # modules compiled on the build machine, so the glibc must match the target.
@@ -17,6 +19,8 @@ set -euo pipefail
 
 ARCH=${1:-arm64}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+source "$ROOT/scripts/lib/build-machine.sh"
+
 MACHINE=${CINDY_BUILD_MACHINE:-cindy-build-$ARCH}
 COMMIT=$(sed -n 's/^commit=//p' "$ROOT/upstream.lock")
 REPO=$(sed -n 's/^repository=//p' "$ROOT/upstream.lock")
@@ -33,19 +37,15 @@ OUT=$ROOT/build/host
 mkdir -p "$OUT"
 
 # The release tarball is ~0.8 GB and the build machine grows by several GB.
-FREE_GB=$(df -g "$ROOT" | awk 'NR==2 {print $4}')
+FREE_GB=$(cindy_free_gb "$ROOT")
 if (( FREE_GB < 10 )); then
-  echo "Only ${FREE_GB} GB free on the Mac; need at least 10 GB. See docs/development.md (disk space)." >&2
+  echo "Only ${FREE_GB} GB free; need at least 10 GB. See docs/development.md (disk space)." >&2
   exit 1
 fi
 
-if ! orb list | awk '{print $1}' | grep -qx "$MACHINE"; then
-  echo "Creating OrbStack machine $MACHINE (debian:bookworm, $ARCH)..."
-  orb create -a "$ARCH" debian:bookworm "$MACHINE"
-  orb -m "$MACHINE" -u root bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git git-lfs curl ca-certificates xz-utils build-essential python3 >/dev/null'
-fi
+cindy_ensure_machine "$MACHINE" "$ARCH" "$ROOT"
 
-orb -m "$MACHINE" bash -lc "set -euo pipefail
+cindy_run_in_machine "$MACHINE" "set -euo pipefail
 if [[ ! -x \$HOME/.local/node/bin/node ]] || [[ \$(\$HOME/.local/node/bin/node -v) != v$NODE_VERSION ]]; then
   cd /tmp
   curl -fsSLO https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-$NODE_ARCH.tar.xz

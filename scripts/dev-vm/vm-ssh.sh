@@ -8,10 +8,11 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 # shellcheck disable=SC1091
 source "$ROOT/.env.local"
 : "${FNOS_VM_HOST:?set in .env.local}" "${FNOS_VM_USER:?}" "${FNOS_VM_PASSWORD:?}"
+PORT=${FNOS_VM_PORT:-22}
 if [[ ${1:-} == --scp ]]; then
-  CMD=(scp -o PubkeyAuthentication=no -o StrictHostKeyChecking=accept-new "$2" "$FNOS_VM_USER@$FNOS_VM_HOST:$3")
+  CMD=(scp -P "$PORT" -o PubkeyAuthentication=no -o StrictHostKeyChecking=accept-new "$2" "$FNOS_VM_USER@$FNOS_VM_HOST:$3")
 else
-  CMD=(ssh -o PubkeyAuthentication=no -o StrictHostKeyChecking=accept-new "$FNOS_VM_USER@$FNOS_VM_HOST" "$1")
+  CMD=(ssh -p "$PORT" -o PubkeyAuthentication=no -o StrictHostKeyChecking=accept-new "$FNOS_VM_USER@$FNOS_VM_HOST" "$1")
 fi
 export FNOS_VM_PASSWORD
 EXP=$(mktemp); trap 'rm -f "$EXP"' EXIT

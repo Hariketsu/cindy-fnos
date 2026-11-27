@@ -5,13 +5,12 @@
 ## 环境分层
 
 ```
-L0  Mac 本机（秒级）     Adapter 单元测试 + 模拟网关（伪造 X-Trim-* 请求头与 /app/cindy 前缀）
+L0  开发机本机（秒级）    Adapter 单元测试 + 模拟网关（伪造 X-Trim-* 请求头与 /app/cindy 前缀）
         ↓
-构建  OrbStack Linux 容器   Host 产物：linux-arm64（原生）/ linux-amd64（Rosetta）→ fnpack → .fpk
+构建  Debian 12 容器        macOS：OrbStack；Linux/WSL2：Docker（debian:bookworm）→ fnpack → .fpk
         ↓
-L1  Mac 上的飞牛 ARM VM（分钟级，主力环境）
-    scp .fpk → appcenter-cli install-fpk → 浏览器自动化走完用户旅程
-    阶段验收前先恢复到「干净基线」
+L1  飞牛开发 VM（分钟级）   macOS：UTM ARM VM；Linux/WSL2：QEMU/KVM x86_64 VM
+    安装 .fpk → 浏览器自动化走完用户旅程；阶段验收前恢复到「干净基线」
         ↓
 L2  用户的 x86 飞牛 NAS    里程碑验收；何时安装、怎样安装由用户决定
 ```
@@ -95,10 +94,10 @@ $F --profile dev-vm --allow-insecure-http storage pools  # 只读验证
 ### 构建 Cindy Host
 
 ```bash
-scripts/build-host.sh arm64     # 开发 VM 用；真机用 amd64
+scripts/build-host.sh arm64     # Mac 开发 VM 用；x86 开发 VM / 真机用 amd64
 ```
 
-脚本会在 OrbStack 中创建 Debian 12 机器 `cindy-build-<arch>`（可用 `CINDY_BUILD_MACHINE` 指定已有机器），安装上游锁定的 Node 和 pnpm，拉取 `upstream.lock` 中的 commit，打上 `patches/` 里的补丁，再依次构建 Renderer 和 Host（只打包 Pi 和 ripgrep），产物输出到 `build/host/cindy-host-linux-<arch>.tar.gz`。
+脚本会在 Debian 12 构建机 `cindy-build-<arch>` 中运行（macOS 默认用 OrbStack，Linux/WSL2 默认用 Docker `debian:bookworm` 容器并挂载命名卷持久化缓存；可用 `CINDY_BUILD_BACKEND=orb|docker` 覆盖，或 `CINDY_BUILD_MACHINE` 指定已有机器/容器），安装上游锁定的 Node 和 pnpm，拉取 `upstream.lock` 中的 commit，打上 `patches/` 里的补丁，再依次构建 Renderer 和 Host（只打包 Pi 和 ripgrep），产物输出到 `build/host/cindy-host-linux-<arch>.tar.gz`。
 
 - 用 Debian 12：飞牛基于 Debian 12（glibc 2.36），而产物里的原生模块是在构建机上编译的。
 - 首次运行时 `pnpm install` 要下载全部 harness，大约 20 分钟。
@@ -207,6 +206,24 @@ UTM 的界面没有快照功能，所以「基线」就是用克隆得到的一�
 | 资源 | 4 核 / 8 GB / 系统盘 64 GB + 数据盘 64 GB |
 
 > `create-vm.sh` 是根据实际搭建过程整理出来的，**还没有从零完整跑过一遍**。下一位使用者跑通后，请删除这条提示。
+
+## 搭建飞牛开发 VM（Linux / WSL2 + QEMU/KVM）
+
+x86_64 Linux 或已开启嵌套虚拟化（`/dev/kvm`）的 WSL2 可用 `scripts/dev-vm/kvm.sh` 跑原生 `x86_64` 飞牛 VM（与 x86 真机同架构）：
+
+1. 安装依赖：`qemu-system-x86`、`qemu-utils`、`ovmf`、`docker.io`、`expect`、`rsync`、`jq`，并把当前用户加入 `docker`、`kvm` 组。
+2. 下载飞牛 **x86_64** ISO，创建并启动图形安装（WSL2 经 WSLg 弹窗）：
+   ```bash
+   scripts/dev-vm/kvm.sh create <fnos_x86.iso>
+   scripts/dev-vm/kvm.sh install
+   ```
+3. 装完在网页端完成初始化（管理员账号、在第二块 64 GB 盘建 btrfs 存储空间、开启 SSH），然后关机、保存基线快照并转为无头运行：
+   ```bash
+   scripts/dev-vm/kvm.sh stop
+   scripts/dev-vm/kvm.sh snapshot save baseline-btrfs
+   scripts/dev-vm/kvm.sh start    # Web UI: 127.0.0.1:5666，SSH 转发端口: 2222
+   ```
+4. 在 `.env.local` 中额外设置 `FNOS_VM_HOST=127.0.0.1`、`FNOS_VM_PORT=2222`，即可照常使用 `scripts/dev-vm/vm-ssh.sh` 与 `fnos-cli`。需要恢复干净基线时先 `kvm.sh stop` 再 `kvm.sh snapshot restore baseline-btrfs`。
 
 ## 需要人工参与的步骤
 

@@ -16,12 +16,16 @@
 # Only committed work is tested; commit (or amend) first. ~/cindy-dev is
 # separate from ~/cindy, so a Host build never resets what is being tested.
 #
-# CINDY_BUILD_MACHINE   OrbStack machine (default: cindy-build-arm64)
+# CINDY_BUILD_MACHINE   Build machine/container (default: cindy-build-arm64 on macOS,
+#                       cindy-build-amd64 on Linux)
+# CINDY_BUILD_BACKEND   orb | docker (default: orb on macOS, docker on Linux)
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+source "$ROOT/scripts/lib/build-machine.sh"
 UPSTREAM=$ROOT/.upstream/cindy
-MACHINE=${CINDY_BUILD_MACHINE:-cindy-build-arm64}
+DEFAULT_ARCH=$([[ $(uname -m) == x86_64 ]] && echo amd64 || echo arm64)
+MACHINE=${CINDY_BUILD_MACHINE:-cindy-build-$DEFAULT_ARCH}
 
 if (( $# < 2 )); then
   echo "usage: scripts/upstream-check.sh <ref> <command...> | <ref> --script <file>" >&2
@@ -41,7 +45,7 @@ else
   LABEL=$CMD
 fi
 
-orb -m "$MACHINE" bash -lc "set -euo pipefail
+cindy_run_in_machine "$MACHINE" "set -euo pipefail
 export PATH=\$HOME/.local/node/bin:\$PATH
 # pnpm 11 checks dependencies before every run/exec and would reinstall every
 # platform from pnpm-workspace.yaml, undoing install --os/--cpu below.
